@@ -32,13 +32,17 @@ export type ErrorDetails = {
 }
 
 export class GatewayError extends Error {
-  constructor(
-    readonly code: ErrorCode,
-    message: string,
-    readonly details: ErrorDetails = {},
-  ) {
+  readonly code: ErrorCode
+  readonly details: ErrorDetails
+
+  // Fields are assigned explicitly rather than declared as constructor
+  // parameter properties: Node's type stripping refuses that syntax, and
+  // `npm run dev` runs this file without a compile step.
+  constructor(code: ErrorCode, message: string, details: ErrorDetails = {}) {
     super(message)
     this.name = 'GatewayError'
+    this.code = code
+    this.details = details
   }
 
   get status(): number {
