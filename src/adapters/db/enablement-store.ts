@@ -33,5 +33,13 @@ export function enablementStore(pool: Pool): EnablementStore {
         prefix,
       ])
     },
+
+    async setToolOverride(workspaceId, toolName, enabled) {
+      await pool.query(
+        `INSERT INTO tool_overrides (workspace_id, tool_name, enabled) VALUES ($1,$2,$3)
+         ON CONFLICT (workspace_id, tool_name) DO UPDATE SET enabled = EXCLUDED.enabled`,
+        [workspaceId, toolName, enabled],
+      )
+    },
   }
 }

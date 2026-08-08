@@ -12,7 +12,14 @@ import { recordAudit } from '../../application/metering.ts'
 import type { Pool } from '../../adapters/db/pool.ts'
 import type { Config } from '../../config.ts'
 import type { Registry } from '../../adapters/providers/registry.ts'
-import type { ConnectionDeps } from '../../application/connections.ts'
+import { parseToolName } from '../../domain/tool-names.ts'
+import { listWorkspaceTools } from '../../application/catalog.ts'
+import { pathParam } from './connections.ts'
+import {
+  beginConnection,
+  disconnect,
+  type ConnectionDeps,
+} from '../../application/connections.ts'
 
 export type AdminDeps = {
   pool: Pool
@@ -160,6 +167,124 @@ export function adminRoutes(deps: AdminDeps): Router {
         calls: counted.calls,
         request_id: req.requestId,
       })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+  router.get('/v1/admin/workspaces/:workspaceId/connections', async (req, res, next) => {
+    try {
+      const workspaceId = workspaceParam(req)
+      const enabled = await deps.connections.enablement.enabledPrefixes(workspaceId)
+      res.json({
+        connections: deps.registry.all().map((adapter) => ({
+          provider: adapter.prefix,
+          grant: adapter.grantId,
+          maturity: adapter.maturity,
+          scopes: adapter.scopes,
+          connected: enabled.includes(adapter.prefix),
+        })),
+        request_id: req.requestId,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+  router.post(
+    '/v1/admin/workspaces/:workspaceId/connections/:prefix/authorize',
+    async (req, res, next) => {
+      try {
+        const workspaceId = workspaceParam(req)
+        // Without this the missing workspace surfaces as a foreign key violation
+        // on the state insert, which is a 500 for what is a 404.
+        await readWorkspace(deps.pool, workspaceId)
+        const prefix = pathParam(req, 'prefix')
+        const { url } = await beginConnection(deps.connections, {
+          workspaceId,
+          prefix,
+          ...(typeof req.body?.return_to === 'string' ? { returnTo: req.body.return_to } : {}),
+        })
+        await recordAudit(deps.pool, {
+          workspaceId,
+          actor: 'service',
+          action: 'connection.authorized',
+          target: prefix,
+          requestId: req.requestId,
+        })
+        res.json({ authorize_url: url, request_id: req.requestId })
+      } catch (err) {
+        next(err)
+      }
+    },
+  )
+
+  router.delete('/v1/admin/workspaces/:workspaceId/connections/:prefix', async (req, res, next) => {
+    try {
+      const workspaceId = workspaceParam(req)
+      await readWorkspace(deps.pool, workspaceId)
+      const prefix = pathParam(req, 'prefix')
+      await disconnect(deps.connections, { workspaceId, prefix })
+      await recordAudit(deps.pool, {
+        workspaceId,
+        actor: 'service',
+        action: 'connection.disconnected',
+        target: prefix,
+        requestId: req.requestId,
+      })
+      res.json({ disconnected: prefix, request_id: req.requestId })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+  router.get('/v1/admin/workspaces/:workspaceId/tools', async (req, res, next) => {
+    try {
+      const { tools, truncated } = await listWorkspaceTools(
+        { registry: deps.registry, enablement: deps.connections.enablement },
+        workspaceParam(req),
+        { includeDisabled: true },
+      )
+      res.json({
+        tools: tools.map((tool) => ({
+          name: tool.name,
+          provider: tool.provider,
+          description: tool.description,
+          write: tool.write,
+          maturity: tool.maturity,
+          enabled: tool.enabled !== false,
+        })),
+        catalog_truncated: truncated,
+        request_id: req.requestId,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+  router.put('/v1/admin/workspaces/:workspaceId/tools/:toolName', async (req, res, next) => {
+    try {
+      const workspaceId = workspaceParam(req)
+      await readWorkspace(deps.pool, workspaceId)
+      const toolName = pathParam(req, 'toolName')
+      if (typeof req.body?.enabled !== 'boolean') {
+        throw new GatewayError('invalid_arguments', 'enabled must be a boolean')
+      }
+      const { prefix, tool } = parseToolName(toolName)
+      // A row for a name no adapter serves would sit in the table forever and a
+      // portal typo would report success while toggling nothing.
+      if (!deps.registry.get(prefix).listTools().some((def) => def.name === tool)) {
+        throw new GatewayError('tool_not_found', `unknown tool: ${toolName}`)
+      }
+      await deps.connections.enablement.setToolOverride(workspaceId, toolName, req.body.enabled)
+      await recordAudit(deps.pool, {
+        workspaceId,
+        actor: 'service',
+        action: 'tool.toggled',
+        target: toolName,
+        requestId: req.requestId,
+      })
+      res.json({ tool: toolName, enabled: req.body.enabled, request_id: req.requestId })
     } catch (err) {
       next(err)
     }

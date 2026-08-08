@@ -13,6 +13,7 @@ const enablement: EnablementStore = {
   },
   async enable() {},
   async disable() {},
+  async setToolOverride() {},
 }
 
 const registry = createRegistry([fakeProvider()])

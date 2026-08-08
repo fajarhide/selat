@@ -52,7 +52,11 @@ export function connectionRoutes(deps: ConnectionDeps, authenticated: Authentica
       if (typeof state !== 'string' || typeof code !== 'string') {
         throw new GatewayError('invalid_arguments', 'callback needs both state and code')
       }
-      const { prefix } = await completeConnection(deps, { state, code })
+      const { prefix, returnTo } = await completeConnection(deps, { state, code })
+      if (returnTo && isDashboardUrl(deps.dashboardUrl, returnTo)) {
+        res.redirect(302, returnTo)
+        return
+      }
       res.type('html').send(connectedPage(prefix))
     } catch (err) {
       next(err)
@@ -76,7 +80,15 @@ export function connectionRoutes(deps: ConnectionDeps, authenticated: Authentica
 
 // Express 5 widens params to string | string[] when a route carries extra
 // middleware, so the value is narrowed once here instead of at every use.
-function pathParam(req: express.Request, key: string): string {
+// This route carries no bearer, so return_to is attacker reachable and an
+// unchecked value is an open redirect. The trailing slash is what stops
+// https://dash.example.com.evil.com passing a bare prefix match.
+function isDashboardUrl(dashboardUrl: string | undefined, returnTo: string): boolean {
+  if (!dashboardUrl) return false
+  return returnTo === dashboardUrl || returnTo.startsWith(`${dashboardUrl}/`)
+}
+
+export function pathParam(req: express.Request, key: string): string {
   const value = req.params[key]
   if (typeof value !== 'string' || value.length === 0) {
     throw new GatewayError('invalid_arguments', `missing path parameter ${key}`)

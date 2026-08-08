@@ -61,6 +61,7 @@ export function createServer(deps: ServerDeps): express.Express {
   const connectionDeps: ConnectionDeps = {
     registry: deps.registry,
     publicUrl: deps.config.publicUrl,
+    dashboardUrl: deps.config.dashboardUrl,
     oauthConfig,
     states: stateStore(deps.pool),
     grants,

@@ -13,6 +13,7 @@ function deps(overrides: Partial<CallDeps> = {}): CallDeps {
       async disabledTools() { return new Set<string>() },
       async enable() {},
       async disable() {},
+    async setToolOverride() {},
     },
     grants: { async accessTokenFor() { return 'token' } },
     idempotency: {
@@ -50,6 +51,7 @@ describe('callTool', () => {
         async disabledTools() { return new Set<string>() },
         async enable() {},
         async disable() {},
+    async setToolOverride() {},
       },
     })
     await expect(
@@ -64,6 +66,7 @@ describe('callTool', () => {
         async disabledTools() { return new Set(['fake__echo']) },
         async enable() {},
         async disable() {},
+    async setToolOverride() {},
       },
     })
     await expect(callTool(off, { ...base, name: 'fake__echo', args: {} })).rejects.toMatchObject({

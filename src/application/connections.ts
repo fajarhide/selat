@@ -15,6 +15,8 @@ import type { EnablementStore } from '../ports/stores.ts'
 export type ConnectionDeps = {
   registry: Registry
   publicUrl: string
+  /** Where the portal lives. Unset on a self-host, which has no portal. */
+  dashboardUrl?: string
   oauthConfig: OauthConfigResolver
   states: StateStore
   grants: GrantStore
@@ -28,7 +30,7 @@ export function redirectUriFor(publicUrl: string, prefix: string): string {
 
 export async function beginConnection(
   deps: ConnectionDeps,
-  input: { workspaceId: string; prefix: string },
+  input: { workspaceId: string; prefix: string; returnTo?: string },
 ): Promise<{ url: string; state: string }> {
   const adapter = deps.registry.get(input.prefix)
   const cfg = deps.oauthConfig(adapter.grantId)
@@ -40,6 +42,7 @@ export async function beginConnection(
     workspaceId: input.workspaceId,
     prefix: input.prefix,
     verifier,
+    returnTo: input.returnTo ?? null,
   })
 
   return {
@@ -56,7 +59,7 @@ export async function beginConnection(
 export async function completeConnection(
   deps: ConnectionDeps,
   input: { state: string; code: string },
-): Promise<{ prefix: string; workspaceId: string }> {
+): Promise<{ prefix: string; workspaceId: string; returnTo: string | null }> {
   const found = await deps.states.consume(input.state)
   if (!found) throw new GatewayError('invalid_arguments', 'unknown or expired oauth state')
 
@@ -70,7 +73,7 @@ export async function completeConnection(
 
   await deps.grants.save(found.workspaceId, adapter.grantId, tokens)
   await deps.enablement.enable(found.workspaceId, found.prefix)
-  return { prefix: found.prefix, workspaceId: found.workspaceId }
+  return { prefix: found.prefix, workspaceId: found.workspaceId, returnTo: found.returnTo }
 }
 
 export async function disconnect(

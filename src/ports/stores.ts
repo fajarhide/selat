@@ -17,4 +17,5 @@ export interface EnablementStore {
   disabledTools(workspaceId: string): Promise<Set<string>>
   enable(workspaceId: string, prefix: string): Promise<void>
   disable(workspaceId: string, prefix: string): Promise<void>
+  setToolOverride(workspaceId: string, toolName: string, enabled: boolean): Promise<void>
 }
