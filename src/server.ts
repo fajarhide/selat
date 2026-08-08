@@ -13,6 +13,7 @@ import { requireCredential } from './interface/http/auth.ts'
 import { restRoutes } from './interface/http/rest.ts'
 import { mcpRoutes } from './interface/http/mcp.ts'
 import { connectionRoutes } from './interface/http/connections.ts'
+import { adminRoutes } from './interface/http/admin.ts'
 import { rateLimiter } from './interface/http/rate-limit.ts'
 import { listWorkspaceTools } from './application/catalog.ts'
 import { createGrantResolver } from './application/grants.ts'
@@ -117,6 +118,19 @@ export function createServer(deps: ServerDeps): express.Express {
       next(err)
     }
   })
+
+  // Mounted only when a service token is configured, so a self-host deployment
+  // has no admin plane unless it asks for one.
+  if (deps.config.serviceToken) {
+    app.use(
+      adminRoutes({
+        pool: deps.pool,
+        config: deps.config,
+        registry: deps.registry,
+        connections: connectionDeps,
+      }),
+    )
+  }
 
   app.use(connectionRoutes(connectionDeps, authenticated))
   // Authentication and the token bucket are mounted once, ahead of both tool
