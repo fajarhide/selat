@@ -13,6 +13,7 @@ import { requireCredential } from './interface/http/auth.ts'
 import { restRoutes } from './interface/http/rest.ts'
 import { mcpRoutes } from './interface/http/mcp.ts'
 import { connectionRoutes } from './interface/http/connections.ts'
+import { rateLimiter } from './interface/http/rate-limit.ts'
 import { listWorkspaceTools } from './application/catalog.ts'
 import { createGrantResolver } from './application/grants.ts'
 import { scopeAllowsProvider } from './domain/credential.ts'
@@ -27,6 +28,8 @@ export type ServerDeps = {
   /** Overridable so tests can point at a fake vendor without a network. */
   oauthConfig?: OauthConfigResolver
   connectionOverrides?: Partial<ConnectionDeps>
+  /** Per workspace token bucket, refilled continuously. */
+  callsPerMinute?: number
 }
 
 export function createServer(deps: ServerDeps): express.Express {
@@ -116,8 +119,11 @@ export function createServer(deps: ServerDeps): express.Express {
   })
 
   app.use(connectionRoutes(connectionDeps, authenticated))
-  app.use(authenticated, mcpRoutes(callDeps))
-  app.use(authenticated, restRoutes(callDeps))
+  // Authentication and the token bucket are mounted once, ahead of both tool
+  // surfaces. Mounting the limiter per router would charge one request twice.
+  app.use(authenticated, rateLimiter(deps.callsPerMinute ?? 600))
+  app.use(mcpRoutes(callDeps, deps.pool))
+  app.use(restRoutes(callDeps, deps.pool))
 
   app.use(errorHandler())
   return app

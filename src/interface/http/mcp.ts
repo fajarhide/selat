@@ -2,14 +2,16 @@ import express, { type Router } from 'express'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { callTool, type CallDeps } from '../../application/call-tool.ts'
+import type { CallDeps } from '../../application/call-tool.ts'
+import { meteredCall } from '../../application/metering.ts'
+import type { Pool } from '../../adapters/db/pool.ts'
 import { listWorkspaceTools } from '../../application/catalog.ts'
 import { scopeAllowsProvider } from '../../domain/credential.ts'
 import { toEnvelope } from '../../domain/errors.ts'
 
 export const SERVER_INFO = { name: 'lycosagate', version: '0.1.0' } as const
 
-export function mcpRoutes(deps: CallDeps): Router {
+export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
   const router = express.Router()
 
   router.post('/mcp', express.json({ limit: '1mb' }), async (req, res) => {
@@ -35,8 +37,9 @@ export function mcpRoutes(deps: CallDeps): Router {
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
-        const result = await callTool(deps, {
+        const result = await meteredCall(pool, deps, {
           workspaceId: gateway.workspaceId,
+          credentialId: gateway.credentialId,
           scope: gateway.scope,
           name: request.params.name,
           args: request.params.arguments ?? {},
