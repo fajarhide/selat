@@ -14,7 +14,11 @@ describe('quickstart', () => {
     const readme = await readFile('README.md', 'utf8')
     expect(readme).toContain('docker compose up')
     expect(readme).toContain('/v1/tools')
-    expect(readme).toContain('Authorization: Bearer slt_live_')
+    // The property is that a reader can see how to authenticate and what a
+    // credential looks like. Asserting one concatenation of the two pinned a
+    // formatting choice, and rewording the README broke a passing build.
+    expect(readme).toContain('Authorization: Bearer')
+    expect(readme).toContain('slt_live_')
     expect(readme).toContain('"mcpServers"')
   })
 

@@ -33,6 +33,12 @@ Your gateway credential, shown once:
   slt_live_gdOhIUCc1cBeZP5…
 ```
 
+That credential is shown once and stored as a hash, so keep it now:
+
+```sh
+export SELAT_TOKEN=slt_live_gdOhIUCc1cBeZP5…
+```
+
 Ask what it can do:
 
 ```sh
