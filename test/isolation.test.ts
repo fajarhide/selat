@@ -25,7 +25,16 @@ const TENANT_TABLES = [
 // A statement that touches a tenant table without naming workspace_id is the
 // one bug class that leaks another customer's data, so it fails the build
 // rather than waiting for review to catch it.
-const STATEMENT = /(SELECT|INSERT|UPDATE|DELETE)[\s\S]*?(?=`)/gi
+//
+// Scan whole string literals of every quoting style. An earlier version ran to
+// the next backtick instead, which silently skipped every file that had none,
+// and credential-store.ts was exactly such a file.
+// A query that genuinely cannot carry the predicate says so on the line above
+// it. Requiring the marker keeps every exception in the diff and in review,
+// which a silently loosened rule would not.
+const LITERAL = /`[^`]*`|'[^']*'|"[^"]*"/g
+const VERB = /\b(SELECT|INSERT|UPDATE|DELETE)\b/i
+const EXEMPT = 'isolation-exempt:'
 
 describe('tenant isolation', () => {
   it('every query against a tenant table names workspace_id', async () => {
@@ -35,8 +44,14 @@ describe('tenant isolation', () => {
       for (const file of await readdir(dir)) {
         if (!file.endsWith('.ts')) continue
         const source = await readFile(`${dir}/${file}`, 'utf8')
-        for (const statement of source.match(STATEMENT) ?? []) {
+        const lines = source.split('\n')
+        for (const statement of source.match(LITERAL) ?? []) {
+          if (!VERB.test(statement)) continue
           if (!TENANT_TABLES.some((table) => statement.includes(table))) continue
+          const line = source.slice(0, source.indexOf(statement)).split('\n').length - 1
+          // Six lines back, because the reason is usually longer than the
+          // query and a marker that only fits on one line invites a bad one.
+          if (lines.slice(Math.max(0, line - 6), line + 1).some((l) => l.includes(EXEMPT))) continue
           checked += 1
           expect(statement, `${dir}/${file}: ${statement.slice(0, 80)}`).toMatch(/workspace_id/)
         }

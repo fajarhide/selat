@@ -54,10 +54,27 @@ describe('credential store', () => {
       'INSERT INTO gateway_credentials (workspace_id, token_hash, last4) VALUES ($1,$2,$3) RETURNING id',
       [workspaceId, hash, last4],
     )
-    await credentialStore(pool).touch(rows[0].id)
-    const after = await pool.query('SELECT last_used_at FROM gateway_credentials WHERE id = $1', [
-      rows[0].id,
-    ])
+    await credentialStore(pool).touch(workspaceId, rows[0].id)
+    const after = await pool.query(
+      'SELECT last_used_at FROM gateway_credentials WHERE id = $1 AND workspace_id = $2',
+      [rows[0].id, workspaceId],
+    )
     expect(after.rows[0].last_used_at).toBeInstanceOf(Date)
+  })
+
+  it('will not stamp a credential belonging to another workspace', async () => {
+    const mine = await seedWorkspace(pool, 'mine')
+    const theirs = await seedWorkspace(pool, 'theirs')
+    const { hash, last4 } = mintCredential('live')
+    const { rows } = await pool.query(
+      'INSERT INTO gateway_credentials (workspace_id, token_hash, last4) VALUES ($1,$2,$3) RETURNING id',
+      [theirs, hash, last4],
+    )
+    await credentialStore(pool).touch(mine, rows[0].id)
+    const after = await pool.query(
+      'SELECT last_used_at FROM gateway_credentials WHERE id = $1 AND workspace_id = $2',
+      [rows[0].id, theirs],
+    )
+    expect(after.rows[0].last_used_at).toBeNull()
   })
 })

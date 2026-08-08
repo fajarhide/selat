@@ -29,7 +29,7 @@ export function requireCredential(store: CredentialStore) {
       }
       req.gateway = { workspaceId: found.workspaceId, credentialId: found.id, scope: found.scope }
       // Fire and forget: a last-used write must never fail a tool call.
-      void store.touch(found.id).catch(() => {})
+      void store.touch(found.workspaceId, found.id).catch(() => {})
       next()
     } catch (err) {
       next(err)

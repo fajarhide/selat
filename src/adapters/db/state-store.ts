@@ -30,6 +30,10 @@ export function stateStore(pool: Pool): StateStore {
       const row = rows[0]
       if (!row) {
         // Drop an expired row too, so the table cannot grow without bound.
+        // isolation-exempt: consume is what discovers the workspace, so it has
+        // none to filter on. The state is a 24 byte random primary key and the
+        // statement reads nothing, so it can only delete the row the caller
+        // already presented.
         await pool.query('DELETE FROM oauth_states WHERE state = $1', [state])
         return null
       }

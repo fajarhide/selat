@@ -18,8 +18,11 @@ export function credentialStore(pool: Pool): CredentialStore {
       } satisfies CredentialRecord
     },
 
-    async touch(id) {
-      await pool.query('UPDATE gateway_credentials SET last_used_at = now() WHERE id = $1', [id])
+    async touch(workspaceId, id) {
+      await pool.query(
+        'UPDATE gateway_credentials SET last_used_at = now() WHERE id = $1 AND workspace_id = $2',
+        [id, workspaceId],
+      )
     },
   }
 }

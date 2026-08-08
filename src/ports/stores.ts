@@ -9,7 +9,7 @@ export type CredentialRecord = {
 
 export interface CredentialStore {
   findByHash(hash: string): Promise<CredentialRecord | null>
-  touch(id: string): Promise<void>
+  touch(workspaceId: string, id: string): Promise<void>
 }
 
 export interface EnablementStore {
