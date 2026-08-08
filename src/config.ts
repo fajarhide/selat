@@ -5,6 +5,8 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   VAULT_KEY: z.string().regex(/^[0-9a-f]{64}$/, 'VAULT_KEY must be 32 bytes of hex'),
   PUBLIC_URL: z.string().url(),
+  SERVICE_TOKEN: z.string().startsWith('slt_svc_').min(40).optional(),
+  DASHBOARD_URL: z.string().url().optional(),
 })
 
 export type Config = {
@@ -12,6 +14,8 @@ export type Config = {
   databaseUrl: string
   vaultKey: Buffer
   publicUrl: string
+  serviceToken?: string
+  dashboardUrl?: string
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -27,5 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: parsed.DATABASE_URL,
     vaultKey,
     publicUrl: parsed.PUBLIC_URL.replace(/\/$/, ''),
+    serviceToken: parsed.SERVICE_TOKEN,
+    dashboardUrl: parsed.DASHBOARD_URL?.replace(/\/$/, ''),
   }
 }
