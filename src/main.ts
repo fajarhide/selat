@@ -1,12 +1,13 @@
 import { loadConfig } from './config.ts'
 import { createPool, runMigrations } from './adapters/db/pool.ts'
 import { createServer } from './server.ts'
+import { bootRegistry } from './adapters/providers/boot.ts'
 
 const config = loadConfig()
 const pool = createPool(config.databaseUrl)
 await runMigrations(pool)
 
-const server = createServer({ pool, config }).listen(config.port, () => {
+const server = createServer({ pool, config, registry: bootRegistry() }).listen(config.port, () => {
   console.log(JSON.stringify({ msg: 'listening', port: config.port }))
 })
 

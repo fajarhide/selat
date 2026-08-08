@@ -3,6 +3,7 @@ import type { Server } from 'node:http'
 import { createServer } from '../src/server.ts'
 import type { Config } from '../src/config.ts'
 import type { Pool } from '../src/adapters/db/pool.ts'
+import { bootRegistry } from '../src/adapters/providers/boot.ts'
 
 const config: Config = {
   port: 0,
@@ -15,7 +16,7 @@ let running: Server | undefined
 afterEach(() => running?.close())
 
 async function listen(pool: Pool): Promise<string> {
-  const server = createServer({ pool, config }).listen(0)
+  const server = createServer({ pool, config, registry: bootRegistry() }).listen(0)
   await new Promise((resolve) => server.once('listening', resolve))
   running = server
   const address = server.address() as { port: number }
