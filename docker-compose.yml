@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: lycosagate
+      POSTGRES_USER: lycosagate
+      POSTGRES_DB: lycosagate
+    ports: ["5432:5432"]
+    volumes:
+      - lycosagate-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lycosagate"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  gateway:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://lycosagate:lycosagate@db:5432/lycosagate
+      PUBLIC_URL: http://localhost:8080
+      # Generate a real one with: openssl rand -hex 32
+      VAULT_KEY: ${VAULT_KEY:?set VAULT_KEY, generate with openssl rand -hex 32}
+    ports: ["8080:8080"]
+
+volumes:
+  lycosagate-db:
