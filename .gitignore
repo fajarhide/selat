@@ -3,3 +3,9 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Product design and delivery plans. These carry pricing, go to market and
+# cloud internals, and this repository is going to get a public remote.
+docs/design.md
+docs/gateway-core-plan.md
+docs/cloud-commercial-plan.md
