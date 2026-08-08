@@ -10,7 +10,7 @@ holds.
 ## Quickstart
 
 ```sh
-git clone https://github.com/selat/selat && cd selat
+git clone https://github.com/getselat/selat && cd selat
 cp .env.example .env && sed -i '' "s/^VAULT_KEY=.*/VAULT_KEY=$(openssl rand -hex 32)/" .env
 docker compose up -d
 npm run quickstart
