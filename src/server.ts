@@ -3,16 +3,22 @@ import type { Config } from './config.ts'
 import type { Pool } from './adapters/db/pool.ts'
 import { credentialStore } from './adapters/db/credential-store.ts'
 import { enablementStore } from './adapters/db/enablement-store.ts'
+import { idempotencyStore } from './adapters/db/idempotency-store.ts'
 import { errorHandler, withRequestContext } from './interface/http/context.ts'
 import { requireCredential } from './interface/http/auth.ts'
+import { restRoutes } from './interface/http/rest.ts'
 import { listWorkspaceTools } from './application/catalog.ts'
 import { scopeAllowsProvider } from './domain/credential.ts'
+import type { GrantResolver, CallDeps } from './application/call-tool.ts'
 import type { Registry } from './adapters/providers/registry.ts'
 
 export type ServerDeps = {
   pool: Pool
   config: Config
   registry: Registry
+  /** Supplied by main.ts. Defaults to a resolver that has no grants, which is
+   *  everything the fake provider needs and nothing a real one does. */
+  grants?: GrantResolver
 }
 
 export function createServer(deps: ServerDeps): express.Express {
@@ -23,6 +29,13 @@ export function createServer(deps: ServerDeps): express.Express {
   const credentials = credentialStore(deps.pool)
   const enablement = enablementStore(deps.pool)
   const authenticated = requireCredential(credentials)
+
+  const callDeps: CallDeps = {
+    registry: deps.registry,
+    enablement,
+    grants: deps.grants ?? { accessTokenFor: async () => null },
+    idempotency: idempotencyStore(deps.pool),
+  }
 
   app.get('/v1/health', (_req, res) => {
     res.json({ status: 'ok' })
@@ -45,10 +58,12 @@ export function createServer(deps: ServerDeps): express.Express {
         'SELECT plan, call_quota FROM workspaces WHERE id = $1',
         [req.auth.workspaceId],
       )
+      const enabled = await enablement.enabledPrefixes(req.auth.workspaceId)
       res.json({
         workspace_id: req.auth.workspaceId,
         plan: rows[0]?.plan ?? 'free',
         call_quota: rows[0]?.call_quota ?? 0,
+        providers: enabled.filter((prefix) => scopeAllowsProvider(req.auth.scope, prefix)),
         credential_scope: req.auth.scope,
         request_id: req.requestId,
       })
@@ -72,6 +87,8 @@ export function createServer(deps: ServerDeps): express.Express {
       next(err)
     }
   })
+
+  app.use(authenticated, restRoutes(callDeps))
 
   app.use(errorHandler())
   return app
