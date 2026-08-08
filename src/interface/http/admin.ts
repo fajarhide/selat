@@ -7,6 +7,7 @@ import {
   mintForWorkspace,
   revokeCredential,
 } from '../../application/credentials.ts'
+import { meterWindow, usageReport } from '../../application/usage-report.ts'
 import { recordAudit } from '../../application/metering.ts'
 import type { Pool } from '../../adapters/db/pool.ts'
 import type { Config } from '../../config.ts'
@@ -125,6 +126,44 @@ export function adminRoutes(deps: AdminDeps): Router {
       }
     },
   )
+
+  router.get('/v1/admin/workspaces/:workspaceId/usage', async (req, res, next) => {
+    try {
+      const report = await usageReport(deps.pool, workspaceParam(req))
+      res.json({
+        period: report.period,
+        calls: report.calls,
+        quota: report.quota,
+        by_provider: report.byProvider,
+        daily: report.daily,
+        recent: report.recent.map((row) => ({
+          tool: row.tool,
+          outcome: row.outcome,
+          latency_ms: row.latencyMs,
+          created_at: row.createdAt,
+        })),
+        request_id: req.requestId,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
+
+  router.get('/v1/admin/workspaces/:workspaceId/usage/meter', async (req, res, next) => {
+    try {
+      // A repeated query parameter arrives as an array, which is not a cursor.
+      const since = typeof req.query.since === 'string' ? req.query.since : undefined
+      const counted = await meterWindow(deps.pool, workspaceParam(req), since)
+      res.json({
+        since: counted.since,
+        until: counted.until,
+        calls: counted.calls,
+        request_id: req.requestId,
+      })
+    } catch (err) {
+      next(err)
+    }
+  })
 
   return router
 }
