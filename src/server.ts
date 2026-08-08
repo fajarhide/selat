@@ -4,22 +4,29 @@ import type { Pool } from './adapters/db/pool.ts'
 import { credentialStore } from './adapters/db/credential-store.ts'
 import { enablementStore } from './adapters/db/enablement-store.ts'
 import { idempotencyStore } from './adapters/db/idempotency-store.ts'
+import { grantStore } from './adapters/db/grant-store.ts'
+import { stateStore } from './adapters/db/state-store.ts'
+import { envOauthConfig, type OauthConfigResolver } from './adapters/oauth/catalog.ts'
+import { refreshGrant } from './adapters/oauth/client.ts'
 import { errorHandler, withRequestContext } from './interface/http/context.ts'
 import { requireCredential } from './interface/http/auth.ts'
 import { restRoutes } from './interface/http/rest.ts'
 import { mcpRoutes } from './interface/http/mcp.ts'
+import { connectionRoutes } from './interface/http/connections.ts'
 import { listWorkspaceTools } from './application/catalog.ts'
+import { createGrantResolver } from './application/grants.ts'
 import { scopeAllowsProvider } from './domain/credential.ts'
-import type { GrantResolver, CallDeps } from './application/call-tool.ts'
+import type { CallDeps } from './application/call-tool.ts'
+import type { ConnectionDeps } from './application/connections.ts'
 import type { Registry } from './adapters/providers/registry.ts'
 
 export type ServerDeps = {
   pool: Pool
   config: Config
   registry: Registry
-  /** Supplied by main.ts. Defaults to a resolver that has no grants, which is
-   *  everything the fake provider needs and nothing a real one does. */
-  grants?: GrantResolver
+  /** Overridable so tests can point at a fake vendor without a network. */
+  oauthConfig?: OauthConfigResolver
+  connectionOverrides?: Partial<ConnectionDeps>
 }
 
 export function createServer(deps: ServerDeps): express.Express {
@@ -29,13 +36,32 @@ export function createServer(deps: ServerDeps): express.Express {
 
   const credentials = credentialStore(deps.pool)
   const enablement = enablementStore(deps.pool)
+  const grants = grantStore(deps.pool, deps.config.vaultKey)
+  const oauthConfig = deps.oauthConfig ?? envOauthConfig()
   const authenticated = requireCredential(credentials)
+
+  const grantResolver = createGrantResolver({
+    grants,
+    oauthConfig,
+    refresh: (cfg, refreshToken) => refreshGrant(cfg, refreshToken),
+    reauthUrl: (grantId) => `${deps.config.publicUrl}/v1/connections/${grantId}/authorize`,
+  })
 
   const callDeps: CallDeps = {
     registry: deps.registry,
     enablement,
-    grants: deps.grants ?? { accessTokenFor: async () => null },
+    grants: grantResolver,
     idempotency: idempotencyStore(deps.pool),
+  }
+
+  const connectionDeps: ConnectionDeps = {
+    registry: deps.registry,
+    publicUrl: deps.config.publicUrl,
+    oauthConfig,
+    states: stateStore(deps.pool),
+    grants,
+    enablement,
+    ...deps.connectionOverrides,
   }
 
   app.get('/v1/health', (_req, res) => {
@@ -89,6 +115,7 @@ export function createServer(deps: ServerDeps): express.Express {
     }
   })
 
+  app.use(connectionRoutes(connectionDeps, authenticated))
   app.use(authenticated, mcpRoutes(callDeps))
   app.use(authenticated, restRoutes(callDeps))
 
