@@ -6,7 +6,9 @@ import type { CredentialStore } from '../../ports/stores.ts'
 declare global {
   namespace Express {
     interface Request {
-      auth: { workspaceId: string; credentialId: string; scope: CredentialScope }
+      /** Named `gateway` rather than `auth`: the MCP SDK augments the same
+       *  request object with its own `auth` of a different shape. */
+      gateway: { workspaceId: string; credentialId: string; scope: CredentialScope }
     }
   }
 }
@@ -25,7 +27,7 @@ export function requireCredential(store: CredentialStore) {
       if (!found || found.revokedAt) {
         throw new GatewayError('invalid_credential', 'unknown or revoked credential')
       }
-      req.auth = { workspaceId: found.workspaceId, credentialId: found.id, scope: found.scope }
+      req.gateway = { workspaceId: found.workspaceId, credentialId: found.id, scope: found.scope }
       // Fire and forget: a last-used write must never fail a tool call.
       void store.touch(found.id).catch(() => {})
       next()

@@ -7,8 +7,8 @@ export function restRoutes(deps: CallDeps): Router {
   router.post('/v1/tools/:name/call', express.json({ limit: '1mb' }), async (req, res, next) => {
     try {
       const result = await callTool(deps, {
-        workspaceId: req.auth.workspaceId,
-        scope: req.auth.scope,
+        workspaceId: req.gateway.workspaceId,
+        scope: req.gateway.scope,
         name: req.params.name,
         args: req.body ?? {},
         requestId: req.requestId,

@@ -7,6 +7,7 @@ import { idempotencyStore } from './adapters/db/idempotency-store.ts'
 import { errorHandler, withRequestContext } from './interface/http/context.ts'
 import { requireCredential } from './interface/http/auth.ts'
 import { restRoutes } from './interface/http/rest.ts'
+import { mcpRoutes } from './interface/http/mcp.ts'
 import { listWorkspaceTools } from './application/catalog.ts'
 import { scopeAllowsProvider } from './domain/credential.ts'
 import type { GrantResolver, CallDeps } from './application/call-tool.ts'
@@ -56,15 +57,15 @@ export function createServer(deps: ServerDeps): express.Express {
     try {
       const { rows } = await deps.pool.query(
         'SELECT plan, call_quota FROM workspaces WHERE id = $1',
-        [req.auth.workspaceId],
+        [req.gateway.workspaceId],
       )
-      const enabled = await enablement.enabledPrefixes(req.auth.workspaceId)
+      const enabled = await enablement.enabledPrefixes(req.gateway.workspaceId)
       res.json({
-        workspace_id: req.auth.workspaceId,
+        workspace_id: req.gateway.workspaceId,
         plan: rows[0]?.plan ?? 'free',
         call_quota: rows[0]?.call_quota ?? 0,
-        providers: enabled.filter((prefix) => scopeAllowsProvider(req.auth.scope, prefix)),
-        credential_scope: req.auth.scope,
+        providers: enabled.filter((prefix) => scopeAllowsProvider(req.gateway.scope, prefix)),
+        credential_scope: req.gateway.scope,
         request_id: req.requestId,
       })
     } catch (err) {
@@ -76,18 +77,19 @@ export function createServer(deps: ServerDeps): express.Express {
     try {
       const { tools, truncated } = await listWorkspaceTools(
         { registry: deps.registry, enablement },
-        req.auth.workspaceId,
+        req.gateway.workspaceId,
         { provider: typeof req.query.provider === 'string' ? req.query.provider : undefined },
       )
       // The credential scope narrows what this bearer may see, on top of what
       // the workspace has connected.
-      const visible = tools.filter((tool) => scopeAllowsProvider(req.auth.scope, tool.provider))
+      const visible = tools.filter((tool) => scopeAllowsProvider(req.gateway.scope, tool.provider))
       res.json({ tools: visible, catalog_truncated: truncated, request_id: req.requestId })
     } catch (err) {
       next(err)
     }
   })
 
+  app.use(authenticated, mcpRoutes(callDeps))
   app.use(authenticated, restRoutes(callDeps))
 
   app.use(errorHandler())
