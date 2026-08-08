@@ -18,7 +18,7 @@ export function requireCredential(store: CredentialStore) {
     try {
       const header = req.get('authorization') ?? ''
       const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
-      if (!token.startsWith('lyc_')) {
+      if (!token.startsWith('slt_')) {
         throw new GatewayError('invalid_credential', 'missing bearer credential')
       }
       // The lookup is by hash, so an attacker who can time it learns nothing

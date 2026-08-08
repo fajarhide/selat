@@ -9,7 +9,7 @@ import { listWorkspaceTools } from '../../application/catalog.ts'
 import { scopeAllowsProvider } from '../../domain/credential.ts'
 import { toEnvelope } from '../../domain/errors.ts'
 
-export const SERVER_INFO = { name: 'lycosagate', version: '0.1.0' } as const
+export const SERVER_INFO = { name: 'selat', version: '0.1.0' } as const
 
 export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
   const router = express.Router()

@@ -1,4 +1,4 @@
-# Lycosagate
+# Selat
 
 The unified tool gateway for AI agents. A workspace connects each upstream once,
 agents use one credential, and the same tools are reachable over MCP Streamable
@@ -10,7 +10,7 @@ holds.
 ## Quickstart
 
 ```sh
-git clone https://github.com/lycosagate/lycosagate && cd lycosagate
+git clone https://github.com/selat/selat && cd selat
 cp .env.example .env && sed -i '' "s/^VAULT_KEY=.*/VAULT_KEY=$(openssl rand -hex 32)/" .env
 docker compose up -d
 npm run quickstart
@@ -19,10 +19,10 @@ npm run quickstart
 The last command prints a credential once. Use it:
 
 ```sh
-curl -s localhost:8080/v1/tools -H "Authorization: Bearer lyc_live_..."
+curl -s localhost:8080/v1/tools -H "Authorization: Bearer slt_live_..."
 
 curl -s -X POST localhost:8080/v1/tools/fake__echo/call \
-  -H "Authorization: Bearer lyc_live_..." -H 'content-type: application/json' \
+  -H "Authorization: Bearer slt_live_..." -H 'content-type: application/json' \
   -d '{"message":"hello"}'
 ```
 
@@ -31,10 +31,10 @@ Or point an MCP client at it:
 ```json
 {
   "mcpServers": {
-    "lycosagate": {
+    "selat": {
       "type": "http",
       "url": "http://localhost:8080/mcp",
-      "headers": { "Authorization": "Bearer lyc_live_..." }
+      "headers": { "Authorization": "Bearer slt_live_..." }
     }
   }
 }
@@ -60,7 +60,7 @@ Set the callback in the vendor console to
 
 ```sh
 curl -s -X POST localhost:8080/v1/connections/github/authorize \
-  -H "Authorization: Bearer lyc_live_..."
+  -H "Authorization: Bearer slt_live_..."
 # open the authorize_url, approve, done
 ```
 
@@ -130,7 +130,7 @@ A contribution merges when that suite is green.
 
 ```sh
 docker compose up -d db          # or a local Postgres on 5432
-createdb lycosagate_test
+createdb selat_test
 npm install
 npm test
 npm run dev

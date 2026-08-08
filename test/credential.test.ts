@@ -10,7 +10,7 @@ import { GatewayError } from '../src/domain/errors.ts'
 describe('credentials', () => {
   it('mints a scannable prefixed token', () => {
     const { token, hash, last4 } = mintCredential('live')
-    expect(token.startsWith('lyc_live_')).toBe(true)
+    expect(token.startsWith('slt_live_')).toBe(true)
     expect(token.length).toBeGreaterThan(40)
     expect(hash).toBe(hashCredential(token))
     expect(hash).not.toContain(token)
@@ -18,7 +18,7 @@ describe('credentials', () => {
   })
 
   it('marks a sandbox token distinctly', () => {
-    expect(mintCredential('test').token.startsWith('lyc_test_')).toBe(true)
+    expect(mintCredential('test').token.startsWith('slt_test_')).toBe(true)
   })
 
   it('mints distinct tokens', () => {

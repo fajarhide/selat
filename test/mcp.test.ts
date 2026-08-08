@@ -60,7 +60,7 @@ describe('mcp surface', () => {
 
   it('rejects a request with no valid bearer', async () => {
     const { base } = await startTestServer()
-    const res = await rpc(base, 'lyc_live_wrong', 'tools/list')
+    const res = await rpc(base, 'slt_live_wrong', 'tools/list')
     expect(res.status).toBe(401)
   })
 

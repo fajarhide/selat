@@ -13,9 +13,9 @@ export default defineConfig({
     env: {
       TEST_DATABASE_URL:
         process.env.TEST_DATABASE_URL ??
-        'postgres://lycosagate:lycosagate@localhost:5432/lycosagate_test',
+        'postgres://selat:selat@localhost:5432/selat_test',
       DATABASE_URL:
-        process.env.DATABASE_URL ?? 'postgres://lycosagate:lycosagate@localhost:5432/lycosagate_test',
+        process.env.DATABASE_URL ?? 'postgres://selat:selat@localhost:5432/selat_test',
       PUBLIC_URL: process.env.PUBLIC_URL ?? 'http://localhost:8080',
       VAULT_KEY:
         process.env.VAULT_KEY ??

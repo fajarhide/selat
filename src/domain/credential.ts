@@ -13,7 +13,7 @@ export function mintCredential(env: 'live' | 'test'): {
   // The fixed prefix is what makes the token matchable by secret scanners,
   // which turns a public leak into an automatic revocation.
   const secret = randomBytes(32).toString('base64url')
-  const token = `lyc_${env}_${secret}`
+  const token = `slt_${env}_${secret}`
   return { token, hash: hashCredential(token), last4: token.slice(-4) }
 }
 

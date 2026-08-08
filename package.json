@@ -1,5 +1,5 @@
 {
-  "name": "lycosagate",
+  "name": "selat",
   "version": "0.1.0",
   "description": "The unified tool gateway for AI agents: one credential, every upstream, over MCP and REST.",
   "type": "module",

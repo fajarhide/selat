@@ -12,15 +12,15 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: lycosagate
-          POSTGRES_PASSWORD: lycosagate
-          POSTGRES_DB: lycosagate_test
+          POSTGRES_USER: selat
+          POSTGRES_PASSWORD: selat
+          POSTGRES_DB: selat_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U lycosagate"
+          --health-cmd "pg_isready -U selat"
           --health-interval 2s --health-timeout 3s --health-retries 20
     env:
-      TEST_DATABASE_URL: postgres://lycosagate:lycosagate@localhost:5432/lycosagate_test
+      TEST_DATABASE_URL: postgres://selat:selat@localhost:5432/selat_test
       PUBLIC_URL: http://localhost:8080
       VAULT_KEY: 11111111111111111111111111111111111111111111111111111111111111ff
     steps:
@@ -42,6 +42,6 @@ jobs:
       # fixture is about to teach someone to commit one.
       - name: no credential literals outside the minting code
         run: |
-          if grep -rInE 'lyc_(live|test)_[A-Za-z0-9_-]{20,}' --exclude-dir=node_modules --exclude-dir=.git .; then
+          if grep -rInE 'slt_(live|test)_[A-Za-z0-9_-]{20,}' --exclude-dir=node_modules --exclude-dir=.git .; then
             echo "credential-shaped literal found"; exit 1
           fi

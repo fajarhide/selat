@@ -14,7 +14,7 @@ describe('quickstart', () => {
     const readme = await readFile('README.md', 'utf8')
     expect(readme).toContain('docker compose up')
     expect(readme).toContain('/v1/tools')
-    expect(readme).toContain('Authorization: Bearer lyc_live_')
+    expect(readme).toContain('Authorization: Bearer slt_live_')
     expect(readme).toContain('"mcpServers"')
   })
 

@@ -2,14 +2,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_PASSWORD: lycosagate
-      POSTGRES_USER: lycosagate
-      POSTGRES_DB: lycosagate
+      POSTGRES_PASSWORD: selat
+      POSTGRES_USER: selat
+      POSTGRES_DB: selat
     ports: ["5432:5432"]
     volumes:
-      - lycosagate-db:/var/lib/postgresql/data
+      - selat-db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lycosagate"]
+      test: ["CMD-SHELL", "pg_isready -U selat"]
       interval: 2s
       timeout: 3s
       retries: 20
@@ -21,11 +21,11 @@ services:
         condition: service_healthy
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://lycosagate:lycosagate@db:5432/lycosagate
+      DATABASE_URL: postgres://selat:selat@db:5432/selat
       PUBLIC_URL: http://localhost:8080
       # Generate a real one with: openssl rand -hex 32
       VAULT_KEY: ${VAULT_KEY:?set VAULT_KEY, generate with openssl rand -hex 32}
     ports: ["8080:8080"]
 
 volumes:
-  lycosagate-db:
+  selat-db:

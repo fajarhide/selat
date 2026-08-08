@@ -56,7 +56,7 @@ Point an MCP client at it:
 
   {
     "mcpServers": {
-      "lycosagate": {
+      "selat": {
         "type": "http",
         "url": "${config.publicUrl}/mcp",
         "headers": { "Authorization": "Bearer ${token}" }

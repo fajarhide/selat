@@ -18,7 +18,7 @@ describe('credential store', () => {
     const found = await credentialStore(pool).findByHash(hash)
     expect(found?.workspaceId).toBe(workspaceId)
     expect(found?.scope).toEqual({ providers: null, readOnly: false })
-    expect(token).toContain('lyc_live_')
+    expect(token).toContain('slt_live_')
   })
 
   it('returns null for an unknown token', async () => {
