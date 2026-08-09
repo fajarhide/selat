@@ -4,8 +4,8 @@ dist/
 *.log
 .DS_Store
 
-# Product design and delivery plans. These carry pricing, go to market and
-# cloud internals, and this repository is going to get a public remote.
-docs/design.md
-docs/gateway-core-plan.md
-docs/cloud-commercial-plan.md
+# Design notes and delivery plans stay local. Some carry pricing, go to market
+# and cloud internals, and the rest are drafts that should be read before they
+# are published. This repository has a public remote, so the whole directory is
+# ignored rather than named file by file.
+docs/
