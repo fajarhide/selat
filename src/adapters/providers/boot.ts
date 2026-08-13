@@ -1,6 +1,9 @@
 import { createRegistry, type ProviderAdapter, type Registry } from './registry.ts'
 import { fakeProvider } from './fake.ts'
 import { githubProvider } from './github.ts'
+import { gmailProvider } from './gmail.ts'
+import { notionProvider } from './notion.ts'
+import { slackProvider } from './slack.ts'
 
 /**
  * The registry is booted from the environment: cloud enables per plan, a
@@ -12,6 +15,16 @@ import { githubProvider } from './github.ts'
  */
 export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
   const adapters: ProviderAdapter[] = [fakeProvider()]
-  if (env.GITHUB_CLIENT_ID) adapters.push(githubProvider())
+  // Keyed on the grant's client id, not the prefix: gmail rides the google
+  // application, so it appears the moment that one is configured.
+  const gated = [
+    ['GITHUB_CLIENT_ID', githubProvider],
+    ['GOOGLE_CLIENT_ID', gmailProvider],
+    ['NOTION_CLIENT_ID', notionProvider],
+    ['SLACK_CLIENT_ID', slackProvider],
+  ] as const
+  for (const [clientId, provider] of gated) {
+    if (env[clientId]) adapters.push(provider())
+  }
   return createRegistry(adapters)
 }

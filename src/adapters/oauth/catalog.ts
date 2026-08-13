@@ -18,6 +18,14 @@ export const GRANT_ENDPOINTS: Record<string, { authorizeUrl: string; tokenUrl: s
     authorizeUrl: 'https://auth.atlassian.com/authorize',
     tokenUrl: 'https://auth.atlassian.com/oauth/token',
   },
+  notion: {
+    authorizeUrl: 'https://api.notion.com/v1/oauth/authorize',
+    tokenUrl: 'https://api.notion.com/v1/oauth/token',
+  },
+  slack: {
+    authorizeUrl: 'https://slack.com/oauth/v2/authorize',
+    tokenUrl: 'https://slack.com/api/oauth.v2.access',
+  },
 }
 
 export type OauthConfigResolver = (grantId: string) => ProviderOAuthConfig
