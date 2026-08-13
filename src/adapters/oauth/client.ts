@@ -6,6 +6,9 @@ export type ProviderOAuthConfig = {
   tokenUrl: string
   clientId: string
   clientSecret?: string
+  /** Vendor specific authorize parameters, such as Google's access_type. They
+   *  are applied first, so none of them can overwrite the ones below. */
+  authorizeParams?: Record<string, string>
 }
 
 export type TokenSet = {
@@ -25,6 +28,9 @@ export function buildAuthorizeUrl(
   params: { redirectUri: string; state: string; challenge: string; scopes: string[] },
 ): string {
   const url = new URL(cfg.authorizeUrl)
+  for (const [key, value] of Object.entries(cfg.authorizeParams ?? {})) {
+    url.searchParams.set(key, value)
+  }
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('client_id', cfg.clientId)
   url.searchParams.set('redirect_uri', params.redirectUri)

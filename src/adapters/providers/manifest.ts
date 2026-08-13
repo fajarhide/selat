@@ -95,6 +95,7 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
     grantId: manifest.grantId ?? manifest.id,
     maturity: manifest.maturity,
     scopes: manifest.scopes,
+    needsCredential: true,
     listTools: () => manifest.tools.map(toolDef),
 
     async callTool(ctx: AdapterContext, name: string, rawArgs: unknown): Promise<ToolResult> {

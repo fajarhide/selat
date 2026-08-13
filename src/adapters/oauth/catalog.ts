@@ -5,7 +5,10 @@ import type { ProviderOAuthConfig } from './client.ts'
  * OAuth endpoints live on the grant, not the provider, because one grant serves
  * many prefixes: a single `google` grant backs gdrive, gdocs and gsheets.
  */
-export const GRANT_ENDPOINTS: Record<string, { authorizeUrl: string; tokenUrl: string }> = {
+export const GRANT_ENDPOINTS: Record<
+  string,
+  { authorizeUrl: string; tokenUrl: string; authorizeParams?: Record<string, string> }
+> = {
   github: {
     authorizeUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
@@ -13,6 +16,10 @@ export const GRANT_ENDPOINTS: Record<string, { authorizeUrl: string; tokenUrl: s
   google: {
     authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
+    // Google issues a refresh token only on a consent that explicitly asks to
+    // stay offline, and only re-issues one when consent is forced. Without
+    // both, the grant dies an hour after it is made and cannot be refreshed.
+    authorizeParams: { access_type: 'offline', prompt: 'consent' },
   },
   atlassian: {
     authorizeUrl: 'https://auth.atlassian.com/authorize',
@@ -21,6 +28,7 @@ export const GRANT_ENDPOINTS: Record<string, { authorizeUrl: string; tokenUrl: s
   notion: {
     authorizeUrl: 'https://api.notion.com/v1/oauth/authorize',
     tokenUrl: 'https://api.notion.com/v1/oauth/token',
+    authorizeParams: { owner: 'user' },
   },
   slack: {
     authorizeUrl: 'https://slack.com/oauth/v2/authorize',

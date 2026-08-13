@@ -66,6 +66,15 @@ export async function callTool(deps: CallDeps, input: CallInput): Promise<ToolRe
   }
 
   const accessToken = await deps.grants.accessTokenFor(input.workspaceId, adapter.grantId)
+  // Enabling a provider and connecting an account are separate steps, so a
+  // workspace can reach here with no grant at all. Without this the null token
+  // goes upstream as `Bearer null` and the vendor's 401 comes back as
+  // reauth_required, which sends someone to repair a connection they never made.
+  if (accessToken === null && adapter.needsCredential !== false) {
+    throw new GatewayError('provider_not_connected', `${prefix} has no connected account`, {
+      provider: prefix,
+    })
+  }
 
   let result: ToolResult
   try {
