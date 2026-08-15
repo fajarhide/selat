@@ -42,6 +42,12 @@ export const GRANT_ENDPOINTS: Record<string, GrantEndpoints> = {
     authorizeUrl: 'https://slack.com/oauth/v2/authorize',
     tokenUrl: 'https://slack.com/api/oauth.v2.access',
   },
+  // Register the application as a public client. X demands HTTP Basic on the
+  // token endpoint from a confidential one, which this client does not send.
+  twitter: {
+    authorizeUrl: 'https://x.com/i/oauth2/authorize',
+    tokenUrl: 'https://api.x.com/2/oauth2/token',
+  },
   // The authorize host is threads.net while the token host is graph.threads.net,
   // which is Meta's split and not a typo.
   threads: {
