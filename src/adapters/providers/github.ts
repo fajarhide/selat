@@ -26,6 +26,14 @@ export const githubManifest: ProviderManifest = {
   },
   tools: [
     {
+      name: 'get_authenticated_user',
+      description: 'Read the account this connection belongs to, with its public counts',
+      write: false,
+      request: 'GET /user',
+      args: {},
+      fields: ['login', 'name', 'html_url', 'public_repos', 'created_at'],
+    },
+    {
       name: 'search_repositories',
       description: 'Search GitHub repositories with a query string, best match first',
       write: false,
