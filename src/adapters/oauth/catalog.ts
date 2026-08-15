@@ -5,10 +5,11 @@ import type { ProviderOAuthConfig } from './client.ts'
  * OAuth endpoints live on the grant, not the provider, because one grant serves
  * many prefixes: a single `google` grant backs gdrive, gdocs and gsheets.
  */
-export const GRANT_ENDPOINTS: Record<
-  string,
-  { authorizeUrl: string; tokenUrl: string; authorizeParams?: Record<string, string> }
-> = {
+// Derived rather than restated, so a new vendor knob is added in one place.
+// The credentials are the half that comes from the environment.
+export type GrantEndpoints = Omit<ProviderOAuthConfig, 'clientId' | 'clientSecret'>
+
+export const GRANT_ENDPOINTS: Record<string, GrantEndpoints> = {
   github: {
     authorizeUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
@@ -40,6 +41,30 @@ export const GRANT_ENDPOINTS: Record<
   slack: {
     authorizeUrl: 'https://slack.com/oauth/v2/authorize',
     tokenUrl: 'https://slack.com/api/oauth.v2.access',
+  },
+  // The authorize host is threads.net while the token host is graph.threads.net,
+  // which is Meta's split and not a typo.
+  threads: {
+    authorizeUrl: 'https://threads.net/oauth/authorize',
+    tokenUrl: 'https://graph.threads.net/oauth/access_token',
+    scopeSeparator: ',',
+    // The code exchange yields an hour-long token carrying no expires_in and
+    // no refresh_token. Traded here for a sixty day one, which is the only
+    // form worth storing.
+    longLived: {
+      url: 'https://graph.threads.net/access_token',
+      tokenParam: 'access_token',
+      params: { grant_type: 'th_exchange_token' },
+      withClientSecret: true,
+    },
+    // Meta refuses the secret on this one, and refuses the call at all until
+    // the token is 24 hours old, which the refresh-before-expiry timing in
+    // grants.ts already satisfies for a sixty day token.
+    longLivedRefresh: {
+      url: 'https://graph.threads.net/refresh_access_token',
+      tokenParam: 'access_token',
+      params: { grant_type: 'th_refresh_token' },
+    },
   },
 }
 

@@ -120,3 +120,88 @@ describe('oauth config from the environment', () => {
     }
   })
 })
+
+describe('a vendor that hands back a short lived token', () => {
+  // Meta's shape: the code exchange yields an hour-long token with no
+  // expires_in and no refresh_token, and a second GET trades it for a long one.
+  const meta = {
+    ...cfg,
+    clientSecret: 'app-secret',
+    longLived: {
+      url: 'https://graph.example.test/access_token',
+      tokenParam: 'access_token',
+      params: { grant_type: 'th_exchange_token' },
+      withClientSecret: true,
+    },
+    longLivedRefresh: {
+      url: 'https://graph.example.test/refresh_access_token',
+      tokenParam: 'access_token',
+      params: { grant_type: 'th_refresh_token' },
+    },
+  }
+
+  function twoStep() {
+    const calls: string[] = []
+    const doFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = String(input)
+      calls.push(url)
+      const body = url.includes('/access_token') && init?.method === 'GET'
+        ? { access_token: 'long-lived', token_type: 'bearer', expires_in: 5_183_944 }
+        : url.includes('refresh_access_token')
+          ? { access_token: 'rolled', token_type: 'bearer', expires_in: 5_183_944 }
+          : { access_token: 'one-hour' }
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
+    return { doFetch, calls }
+  }
+
+  it('trades the short token for the long one before returning', async () => {
+    const { doFetch, calls } = twoStep()
+    const tokens = await exchangeCode(
+      meta,
+      { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' },
+      doFetch,
+    )
+    expect(tokens.accessToken).toBe('long-lived')
+    expect(calls).toHaveLength(2)
+
+    const traded = new URL(calls[1] as string)
+    expect(traded.searchParams.get('grant_type')).toBe('th_exchange_token')
+    expect(traded.searchParams.get('access_token')).toBe('one-hour')
+    expect(traded.searchParams.get('client_secret')).toBe('app-secret')
+  })
+
+  it('keeps the long token as its own refresh credential', async () => {
+    const { doFetch } = twoStep()
+    const tokens = await exchangeCode(
+      meta,
+      { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' },
+      doFetch,
+    )
+    // The vendor sends no refresh_token. Left null, the grant would read as
+    // unrefreshable and die at its first expiry instead of rolling.
+    expect(tokens.refreshToken).toBe('long-lived')
+    expect(tokens.expiresAt?.getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it('rolls it through the refresh endpoint, without the secret', async () => {
+    const { doFetch, calls } = twoStep()
+    const rolled = await refreshGrant(meta, 'long-lived', doFetch)
+    expect(rolled.accessToken).toBe('rolled')
+
+    const url = new URL(calls[0] as string)
+    expect(url.pathname).toBe('/refresh_access_token')
+    expect(url.searchParams.get('access_token')).toBe('long-lived')
+    // Meta rejects the call outright when the secret is present.
+    expect(url.searchParams.get('client_secret')).toBeNull()
+  })
+
+  it('leaves an ordinary vendor on the single form post it always used', async () => {
+    const { doFetch, calls } = twoStep()
+    await exchangeCode(cfg, { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' }, doFetch)
+    expect(calls).toHaveLength(1)
+  })
+})
