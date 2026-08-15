@@ -1,5 +1,13 @@
 import { GatewayError } from '../../domain/errors.ts'
 
+/**
+ * What promotion means here, because the words are otherwise a matter of taste:
+ * experimental is a provider written from documentation and passing its tests
+ * against fixtures, beta is one somebody has called against the real vendor,
+ * and ga is one that has carried real traffic. Fixtures catch a wrong shape and
+ * cannot catch a wrong document, so the step from experimental to beta is a
+ * human act and never a passing suite.
+ */
 export type Maturity = 'experimental' | 'beta' | 'ga'
 
 export type ToolDef = {

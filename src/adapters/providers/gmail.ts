@@ -7,7 +7,7 @@ export const gmailManifest: ProviderManifest = {
   // One google OAuth application backs every google prefix, so the grant is
   // named for the vendor and not for this adapter.
   grantId: 'google',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://gmail.googleapis.com',
   scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
   auth: { type: 'bearer' },
