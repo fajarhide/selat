@@ -36,6 +36,7 @@ export async function beginConnection(
   const cfg = deps.oauthConfig(adapter.grantId)
   const { verifier, challenge } = createPkce()
   const state = randomBytes(24).toString('base64url')
+  const enabled = await deps.enablement.enabledPrefixes(input.workspaceId)
 
   await deps.states.put({
     state,
@@ -51,9 +52,31 @@ export async function beginConnection(
       redirectUri: redirectUriFor(deps.publicUrl, input.prefix),
       state,
       challenge,
-      scopes: adapter.scopes,
+      scopes: scopesForGrant(deps.registry, adapter, enabled),
     }),
   }
+}
+
+/**
+ * One grant can back several prefixes, and the callback overwrites it whole.
+ * Asking only for the scopes of the prefix being connected therefore narrows
+ * the token every sibling reads, and the siblings start failing with a vendor
+ * 403 that no reconnect of their own would fix. So the request carries the
+ * union: this prefix, plus every already-connected prefix on the same grant.
+ */
+function scopesForGrant(
+  registry: Registry,
+  connecting: { prefix: string; grantId: string; scopes: string[] },
+  enabledPrefixes: string[],
+): string[] {
+  const wanted = new Set(connecting.scopes)
+  for (const adapter of registry.all()) {
+    if (adapter.grantId !== connecting.grantId) continue
+    if (adapter.prefix === connecting.prefix) continue
+    if (!enabledPrefixes.includes(adapter.prefix)) continue
+    for (const scope of adapter.scopes) wanted.add(scope)
+  }
+  return [...wanted].sort()
 }
 
 export async function completeConnection(
