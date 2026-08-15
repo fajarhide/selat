@@ -43,9 +43,16 @@ export type Registry = {
   all(): ProviderAdapter[]
 }
 
+// Owned by the meta tools, which live outside the registry. A provider that
+// claimed it would shadow selat__search_tools.
+const RESERVED_PREFIX = 'selat'
+
 export function createRegistry(adapters: ProviderAdapter[]): Registry {
   const byPrefix = new Map(adapters.map((adapter) => [adapter.prefix, adapter]))
   if (byPrefix.size !== adapters.length) throw new Error('duplicate provider prefix in registry')
+  if (byPrefix.has(RESERVED_PREFIX)) {
+    throw new Error(`${RESERVED_PREFIX} is a reserved prefix and cannot be a provider`)
+  }
   return {
     get(prefix) {
       const found = byPrefix.get(prefix)

@@ -15,7 +15,9 @@ import { mcpRoutes } from './interface/http/mcp.ts'
 import { connectionRoutes } from './interface/http/connections.ts'
 import { adminRoutes } from './interface/http/admin.ts'
 import { rateLimiter } from './interface/http/rate-limit.ts'
-import { listWorkspaceTools } from './application/catalog.ts'
+import { listWorkspaceTools, TOOL_BUDGET } from './application/catalog.ts'
+import { searchTools } from './application/tool-search.ts'
+import { searchToolCatalogEntry } from './application/meta-tools.ts'
 import { createGrantResolver } from './application/grants.ts'
 import { scopeAllowsProvider } from './domain/credential.ts'
 import type { CallDeps } from './application/call-tool.ts'
@@ -104,17 +106,39 @@ export function createServer(deps: ServerDeps): express.Express {
     }
   })
 
+  // A search answers a question, so it returns few results rather than a page
+  // sized to what a model can hold in its tool list.
+  const SEARCH_RESULT_LIMIT = 25
+
   app.get('/v1/tools', authenticated, async (req, res, next) => {
     try {
-      const { tools, truncated } = await listWorkspaceTools(
+      const query = typeof req.query.q === 'string' ? req.query.q : undefined
+      const { tools } = await listWorkspaceTools(
         { registry: deps.registry, enablement },
         req.gateway.workspaceId,
-        { provider: typeof req.query.provider === 'string' ? req.query.provider : undefined },
+        {
+          provider: typeof req.query.provider === 'string' ? req.query.provider : undefined,
+          limit: null,
+        },
       )
       // The credential scope narrows what this bearer may see, on top of what
-      // the workspace has connected.
+      // the workspace has connected. Capped after that filter, so the count
+      // reported is the one this bearer can actually reach.
       const visible = tools.filter((tool) => scopeAllowsProvider(req.gateway.scope, tool.provider))
-      res.json({ tools: visible, catalog_truncated: truncated, request_id: req.requestId })
+      // A search asks a question about the whole catalog, so the budget that
+      // exists to keep a model's tool list short does not apply to it.
+      const listed = query ? searchTools(visible, query, SEARCH_RESULT_LIMIT) : visible.slice(0, TOOL_BUDGET)
+      res.json({
+        // Listed beside the rest, not instead of them. Left out of a search
+        // result because search is what it does, and left out of an empty
+        // catalog because searching nothing is an invitation to a dead end.
+        tools:
+          query || visible.length === 0
+            ? listed
+            : [...listed, searchToolCatalogEntry(visible.length, visible.length - listed.length)],
+        catalog_truncated: !query && visible.length > listed.length,
+        request_id: req.requestId,
+      })
     } catch (err) {
       next(err)
     }

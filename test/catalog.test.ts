@@ -61,4 +61,51 @@ describe('catalog', () => {
     const { truncated } = await listWorkspaceTools({ registry, enablement }, 'ws-1')
     expect(truncated).toBe(false)
   })
+
+  it('returns everything and claims no truncation when the limit is lifted', async () => {
+    const big = createRegistry([fakeProvider({ toolCount: TOOL_BUDGET + 5 })])
+    const deps = { registry: big, enablement }
+    const capped = await listWorkspaceTools(deps, 'ws-1')
+    const whole = await listWorkspaceTools(deps, 'ws-1', { limit: null })
+
+    expect(capped.tools).toHaveLength(TOOL_BUDGET)
+    expect(capped.truncated).toBe(true)
+    expect(whole.tools.length).toBeGreaterThan(TOOL_BUDGET)
+    // Nothing was cut, so nothing may be reported as cut.
+    expect(whole.truncated).toBe(false)
+  })
+})
+
+describe('catalog fairness', () => {
+  const two: EnablementStore = { ...enablement, async enabledPrefixes() { return ['fake', 'other'] } }
+
+  it('samples every provider instead of letting boot order decide', async () => {
+    // Boot order alone would list all 40 of the first and 20 of the second.
+    const first = fakeProvider({ toolCount: 40 })
+    const second = { ...fakeProvider({ toolCount: 40 }), id: 'other', prefix: 'other' }
+    const { tools } = await listWorkspaceTools(
+      { registry: createRegistry([first, second]), enablement: two },
+      'ws-1',
+    )
+    const fromSecond = tools.filter((tool) => tool.provider === 'other')
+    expect(tools).toHaveLength(TOOL_BUDGET)
+    expect(fromSecond.length).toBe(30)
+  })
+
+  it('never lets a large provider crowd out a small one', async () => {
+    const big = fakeProvider({ toolCount: 80 })
+    const small = { ...fakeProvider({ toolCount: 1 }), id: 'other', prefix: 'other' }
+    const { tools } = await listWorkspaceTools(
+      { registry: createRegistry([big, small]), enablement: two },
+      'ws-1',
+    )
+    expect(tools.some((tool) => tool.provider === 'other')).toBe(true)
+  })
+})
+
+describe('reserved prefix', () => {
+  it('refuses a provider that claims the meta namespace', () => {
+    const impostor = { ...fakeProvider(), id: 'selat', prefix: 'selat' }
+    expect(() => createRegistry([impostor])).toThrow(/reserved/)
+  })
 })
