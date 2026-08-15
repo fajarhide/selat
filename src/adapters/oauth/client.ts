@@ -12,6 +12,27 @@ export type ProviderOAuthConfig = {
   /** Defaults to the space RFC 6749 specifies. Meta reads the Threads scope
    *  list as comma separated and grants nothing when it is given spaces. */
   scopeSeparator?: string
+  /**
+   * A second call some vendors require before the token is usable. Meta hands
+   * back an hour-long token from the code exchange and expects it traded for a
+   * sixty day one, through a GET carrying the token in the query string rather
+   * than a form post. Declared as data so a second Meta surface is a table
+   * entry, not another branch in here.
+   */
+  longLived?: LongLivedExchange
+  /** How that long-lived token is rolled before it expires. Meta issues no
+   *  refresh token, so the access token is what gets presented. */
+  longLivedRefresh?: LongLivedExchange
+}
+
+export type LongLivedExchange = {
+  url: string
+  /** Query parameter the current token travels in. */
+  tokenParam: string
+  /** Fixed query parameters, such as grant_type=th_exchange_token. */
+  params: Record<string, string>
+  /** Meta wants the secret on the first trade and refuses it on the refresh. */
+  withClientSecret?: boolean
 }
 
 export type TokenSet = {
@@ -59,7 +80,9 @@ export async function exchangeCode(
     code_verifier: params.verifier,
     ...(cfg.clientSecret ? { client_secret: cfg.clientSecret } : {}),
   })
-  return parseTokenResponse(await post(cfg.tokenUrl, body, doFetch))
+  const short = await parseTokenResponse(await post(cfg.tokenUrl, body, doFetch))
+  if (!cfg.longLived) return short
+  return tradeUp(cfg, short.accessToken, cfg.longLived, doFetch)
 }
 
 export async function refreshGrant(
@@ -67,6 +90,10 @@ export async function refreshGrant(
   refreshToken: string,
   doFetch: typeof fetch = fetch,
 ): Promise<TokenSet> {
+  // Where the vendor issues no refresh token, the stored one is the access
+  // token itself, which is what its refresh endpoint asks to be shown.
+  if (cfg.longLivedRefresh) return tradeUp(cfg, refreshToken, cfg.longLivedRefresh, doFetch)
+
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
@@ -74,6 +101,28 @@ export async function refreshGrant(
     ...(cfg.clientSecret ? { client_secret: cfg.clientSecret } : {}),
   })
   return parseTokenResponse(await post(cfg.tokenUrl, body, doFetch))
+}
+
+async function tradeUp(
+  cfg: ProviderOAuthConfig,
+  token: string,
+  step: LongLivedExchange,
+  doFetch: typeof fetch,
+): Promise<TokenSet> {
+  const url = new URL(step.url)
+  for (const [key, value] of Object.entries(step.params)) url.searchParams.set(key, value)
+  url.searchParams.set(step.tokenParam, token)
+  if (step.withClientSecret && cfg.clientSecret) {
+    url.searchParams.set('client_secret', cfg.clientSecret)
+  }
+
+  const traded = await parseTokenResponse(
+    await doFetch(url.toString(), { method: 'GET', headers: { accept: 'application/json' } }),
+  )
+  // The refresh credential is the long-lived token, because the vendor that
+  // needs this step is the vendor that never sends a refresh_token. Without
+  // this the grant looks unrefreshable and dies at its first expiry.
+  return { ...traded, refreshToken: traded.refreshToken ?? traded.accessToken }
 }
 
 async function post(url: string, body: URLSearchParams, doFetch: typeof fetch): Promise<Response> {

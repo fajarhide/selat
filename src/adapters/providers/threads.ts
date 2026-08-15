@@ -4,24 +4,17 @@ import type { ProviderAdapter } from './registry.ts'
 /**
  * Written ahead of activation, which is the plan for every social provider:
  * the adapter lands early and the vendor approval decides when it turns on.
- * Nothing here has been run against the real API, because that needs a Meta
- * app this repository does not have.
  *
- * Two things in Meta's OAuth are not handled yet, and both bite after the
- * connect flow appears to succeed rather than during it:
+ * Meta's token dance is handled in the grant table rather than here: the code
+ * exchange yields an hour-long token with no expires_in and no refresh_token,
+ * traded through a second call for a sixty day one, and rolled through a third.
+ * See the threads entry in adapters/oauth/catalog.ts.
  *
- * 1. The code exchange returns a token that lives about an hour, and carries
- *    no expires_in and no refresh_token. A grant with no expiry reads as fresh
- *    forever here, so the gateway keeps presenting a dead token and the caller
- *    sees reauth_required from then on. The fix is Meta's own second step,
- *    GET /access_token?grant_type=th_exchange_token, which trades the short
- *    token for a sixty day one, plus GET /refresh_access_token to roll it.
- * 2. Both of those are GET requests with the token in the query string, which
- *    the OAuth client cannot express: it posts a form body.
- *
- * So this provider lists and calls correctly, and cannot yet hold a connection
- * for longer than an hour. Do not enable it for anyone until that is built and
- * verified against a real app.
+ * What is still unproven is everything, in the sense that matters: no request
+ * in this file or that flow has reached Meta. Both are covered by tests
+ * against fixtures written from the documentation, which catches a wrong
+ * shape and cannot catch a wrong document. Treat the first real connection as
+ * the test, and expect the token dance to be where it goes wrong.
  */
 
 // Meta returns id and nothing else unless the request names the fields it
