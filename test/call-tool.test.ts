@@ -63,7 +63,7 @@ describe('callTool', () => {
     const reached = vi.fn()
     const needy = {
       ...fakeProvider(),
-      needsCredential: true,
+      credential: 'oauth' as const,
       callTool: async () => {
         reached()
         return { content: null, nextCursor: null, hasMore: false }

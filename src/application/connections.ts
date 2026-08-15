@@ -41,6 +41,13 @@ export async function beginConnection(
   input: { workspaceId: string; prefix: string; returnTo?: string },
 ): Promise<{ url: string; state: string }> {
   const adapter = deps.registry.get(input.prefix)
+  if (adapter.credential === 'api_key') {
+    throw new GatewayError(
+      'invalid_arguments',
+      `${input.prefix} takes an api key rather than a consent, so use PUT /v1/connections/${input.prefix}/key`,
+      { provider: input.prefix },
+    )
+  }
   const cfg = deps.oauthConfig(adapter.grantId)
   const { verifier, challenge } = createPkce()
   const state = randomBytes(24).toString('base64url')
@@ -105,6 +112,37 @@ export async function completeConnection(
   await deps.grants.save(found.workspaceId, adapter.grantId, tokens)
   await deps.enablement.enable(found.workspaceId, found.prefix)
   return { prefix: found.prefix, workspaceId: found.workspaceId, returnTo: found.returnTo }
+}
+
+/**
+ * An API key is a grant that never expires and cannot be refreshed, so it goes
+ * into the same encrypted store as an OAuth token and inherits everything that
+ * already hangs off a grant: the vault, the shared-grant rules, disconnect, and
+ * the guard that refuses a call when no credential exists. There is no second
+ * table and no second code path.
+ */
+export async function setApiKey(
+  deps: ConnectionDeps,
+  input: { workspaceId: string; prefix: string; key: string },
+): Promise<void> {
+  const adapter = deps.registry.get(input.prefix)
+  if (adapter.credential !== 'api_key') {
+    throw new GatewayError(
+      'invalid_arguments',
+      `${input.prefix} connects through a consent, not an api key`,
+      { provider: input.prefix },
+    )
+  }
+  const key = input.key.trim()
+  if (!key) throw new GatewayError('invalid_arguments', 'api_key must not be empty')
+
+  await deps.grants.save(input.workspaceId, adapter.grantId, {
+    accessToken: key,
+    refreshToken: null,
+    expiresAt: null,
+    scopes: adapter.scopes,
+  })
+  await deps.enablement.enable(input.workspaceId, input.prefix)
 }
 
 export async function disconnect(

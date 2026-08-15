@@ -8,6 +8,24 @@ import type { AdapterContext, Maturity, ProviderAdapter, ToolDef, ToolResult } f
  */
 export type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
+/**
+ * Nine of every ten providers in the widest catalog anyone has built take an
+ * API key rather than an OAuth grant, so bearer alone locks most of the
+ * addressable surface out by construction. The two shapes differ only in where
+ * the secret is written, which is data.
+ */
+export type AuthScheme =
+  | { type: 'bearer' }
+  | {
+      type: 'api_key'
+      /** Where the key travels. */
+      in: 'header' | 'query'
+      /** Header or query parameter name, for example authorization or api_key. */
+      name: string
+      /** Written before the key. Discord bots want "Bot ", including the space. */
+      prefix?: string
+    }
+
 export type ArgDef = {
   type: 'string' | 'number' | 'boolean'
   description?: string
@@ -28,6 +46,12 @@ export type Pagination =
       nextPath: string
       hasMorePath?: string
     }
+  /**
+   * The response carries no cursor at all and the caller is expected to ask
+   * for what came before the last id it holds. Discord pages this way, and so
+   * does anything modelled on a snowflake id.
+   */
+  | { style: 'id'; size: number; sizeParam: string; param: string; idPath?: string }
 
 export type ErrorRules = {
   /** What a bare 403 means here. Defaults to reauth_required, which is right
@@ -72,7 +96,7 @@ export type ProviderManifest = {
   maturity: Maturity
   baseUrl: string
   scopes: string[]
-  auth: { type: 'bearer' }
+  auth: AuthScheme
   /** Merged under the headers the executor sets, never over them. */
   headers?: Record<string, string>
   pagination?: Pagination
@@ -100,7 +124,7 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
     grantId: manifest.grantId ?? manifest.id,
     maturity: manifest.maturity,
     scopes: manifest.scopes,
-    needsCredential: true,
+    credential: manifest.auth.type === 'api_key' ? 'api_key' : 'oauth',
     listTools: () => manifest.tools.map(toolDef),
 
     async callTool(ctx: AdapterContext, name: string, rawArgs: unknown): Promise<ToolResult> {
@@ -112,11 +136,12 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
       const cursor = readCursor(fail, paging, rawArgs)
       const request = buildRequest(manifest, tool, args, paging, cursor)
 
-      const res = await ctx.fetch(request.url, {
+      const secret = ctx.accessToken ?? ''
+      const res = await ctx.fetch(withKeyInQuery(request.url, manifest.auth, secret), {
         ...request.init,
         headers: {
           ...manifest.headers,
-          authorization: `Bearer ${ctx.accessToken}`,
+          ...authHeader(manifest.auth, secret),
           'x-request-id': ctx.requestId,
           ...(request.init.body ? { 'content-type': 'application/json' } : {}),
         },
@@ -133,6 +158,23 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
 }
 
 type Fail = (code: ErrorCode, message: string, retryAfter?: number) => GatewayError
+
+/** Merged over any static manifest header, so a manifest cannot make itself a
+ *  way to send somebody else's credential. */
+function authHeader(auth: AuthScheme, secret: string): Record<string, string> {
+  if (auth.type === 'bearer') return { authorization: `Bearer ${secret}` }
+  if (auth.in === 'header') return { [auth.name]: `${auth.prefix ?? ''}${secret}` }
+  return {}
+}
+
+function withKeyInQuery(url: string, auth: AuthScheme, secret: string): string {
+  if (auth.type !== 'api_key' || auth.in !== 'query') return url
+  // A key in the query string ends up in vendor access logs, which is the
+  // vendor's choice and not ours. Nothing here writes it anywhere else.
+  const parsed = new URL(url)
+  parsed.searchParams.set(auth.name, `${auth.prefix ?? ''}${secret}`)
+  return parsed.toString()
+}
 
 function pagingFor(manifest: ProviderManifest, tool: ToolManifest): Pagination | undefined {
   return tool.items ? (tool.pagination ?? manifest.pagination) : undefined
@@ -272,6 +314,9 @@ function buildRequest(
   } else if (paging?.style === 'cursor') {
     if (paging.size !== undefined && paging.sizeParam) put(paging.sizeParam, paging.size)
     if (cursor !== undefined) put(paging.param, cursor)
+  } else if (paging?.style === 'id') {
+    put(paging.sizeParam, paging.size)
+    if (cursor !== undefined) put(paging.param, cursor)
   }
 
   const search = query.toString()
@@ -341,6 +386,16 @@ async function readResponse(
     const hasMore = list.length === paging.size
     const page = typeof cursor === 'number' ? cursor : 1
     return { content: { items }, nextCursor: hasMore ? String(page + 1) : null, hasMore }
+  }
+
+  if (paging.style === 'id') {
+    // Read off the raw item, because projection may well have dropped the id
+    // this provider pages by.
+    const hasMore = list.length === paging.size
+    const last = list[list.length - 1]
+    const next = hasMore ? getPath(last, paging.idPath ?? 'id') : undefined
+    const token = typeof next === 'string' || typeof next === 'number' ? String(next) : null
+    return { content: { items }, nextCursor: token, hasMore: token !== null }
   }
 
   const next = getPath(body, paging.nextPath)

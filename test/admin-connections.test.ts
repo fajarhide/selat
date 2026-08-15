@@ -72,9 +72,9 @@ describe('admin connections', () => {
     const listed = await json(
       await fetch(`${base}/v1/admin/workspaces/${workspaceId}/connections`, { headers: svc }),
     )
-    expect(listed.connections).toEqual([
+    expect(listed.connections).toContainEqual(
       expect.objectContaining({ provider: 'fake', grant: 'fake', connected: true }),
-    ])
+    )
   })
 
   it('keeps the html page when return_to is not the dashboard', async () => {

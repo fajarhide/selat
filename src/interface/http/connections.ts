@@ -4,6 +4,7 @@ import {
   beginConnection,
   completeConnection,
   disconnect,
+  setApiKey,
   type ConnectionDeps,
 } from '../../application/connections.ts'
 import type { requireCredential } from './auth.ts'
@@ -22,6 +23,9 @@ export function connectionRoutes(deps: ConnectionDeps, authenticated: Authentica
           grant: adapter.grantId,
           maturity: adapter.maturity,
           scopes: adapter.scopes,
+          // A client has to know whether to open a consent window or ask for
+          // a secret, and it cannot tell from the prefix.
+          credential: adapter.credential ?? 'oauth',
           connected: enabled.includes(adapter.prefix),
         })),
         request_id: req.requestId,
@@ -62,6 +66,27 @@ export function connectionRoutes(deps: ConnectionDeps, authenticated: Authentica
       next(err)
     }
   })
+
+  // The key arrives on the workspace's own credential and is written straight
+  // into the vault. It is never echoed back, not even the tail of it.
+  router.put(
+    '/v1/connections/:prefix/key',
+    authenticated,
+    express.json({ limit: '8kb' }),
+    async (req, res, next) => {
+      try {
+        const body = (req.body ?? {}) as { api_key?: unknown }
+        if (typeof body.api_key !== 'string') {
+          throw new GatewayError('invalid_arguments', 'api_key must be a string')
+        }
+        const prefix = pathParam(req, 'prefix')
+        await setApiKey(deps, { workspaceId: req.gateway.workspaceId, prefix, key: body.api_key })
+        res.json({ connected: prefix, request_id: req.requestId })
+      } catch (err) {
+        next(err)
+      }
+    },
+  )
 
   router.delete('/v1/connections/:prefix', authenticated, async (req, res, next) => {
     try {
