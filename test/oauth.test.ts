@@ -205,3 +205,45 @@ describe('a vendor that hands back a short lived token', () => {
     expect(calls).toHaveLength(1)
   })
 })
+
+describe('a token endpoint that demands http basic', () => {
+  function capture() {
+    const seen: { headers: Record<string, string>; body: string }[] = []
+    const doFetch = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      seen.push({
+        headers: init?.headers as Record<string, string>,
+        body: String(init?.body),
+      })
+      return new Response(JSON.stringify({ access_token: 'a', expires_in: 7200 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as typeof fetch
+    return { doFetch, seen }
+  }
+
+  const exchange = { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' }
+
+  it('sends the secret as basic and keeps it out of the body', async () => {
+    const { doFetch, seen } = capture()
+    await exchangeCode({ ...cfg, clientSecret: 's3cret', tokenAuth: 'basic' }, exchange, doFetch)
+    const sent = seen[0]!
+    expect(sent.headers.authorization).toBe(`Basic ${Buffer.from('cid:s3cret').toString('base64')}`)
+    // Sending it in both places is what some servers reject outright.
+    expect(sent.body).not.toContain('client_secret')
+  })
+
+  it('falls back to the body for a public client, which has no secret to send', async () => {
+    const { doFetch, seen } = capture()
+    await exchangeCode({ ...cfg, tokenAuth: 'basic' }, exchange, doFetch)
+    expect(seen[0]!.headers.authorization).toBeUndefined()
+    expect(seen[0]!.body).toContain('client_id=cid')
+  })
+
+  it('leaves an ordinary vendor sending the secret in the body', async () => {
+    const { doFetch, seen } = capture()
+    await exchangeCode({ ...cfg, clientSecret: 's3cret' }, exchange, doFetch)
+    expect(seen[0]!.headers.authorization).toBeUndefined()
+    expect(seen[0]!.body).toContain('client_secret=s3cret')
+  })
+})

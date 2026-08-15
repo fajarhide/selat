@@ -32,7 +32,12 @@ export type ArgDef = {
   required?: boolean
   enum?: string[]
   default?: string | number | boolean
-  /** Upstream parameter name, when it differs from the one the agent sees. */
+  /**
+   * Upstream parameter name, when it differs from the one the agent sees.
+   * In a query string it is a literal key, dots included, because X really
+   * does call one `tweet.fields`. In a JSON body it is a dotted path, because
+   * X really does nest a reply as {reply: {in_reply_to_tweet_id}}.
+   */
   param?: string
 }
 
@@ -298,7 +303,7 @@ function buildRequest(
   const toQuery = method === 'GET' || method === 'DELETE'
   const put = (key: string, value: unknown) => {
     if (toQuery) query.set(key, String(value))
-    else body[key] = value
+    else setPath(body, key, value)
   }
 
   for (const [name, def] of Object.entries(tool.args)) {
@@ -367,6 +372,16 @@ async function readResponse(
       code === 'reauth_required'
         ? `${manifest.prefix} rejected the credential`
         : `${manifest.prefix} refused the request, and reconnecting will not help`,
+    )
+  }
+  // 402 is rare enough that the bare status is a puzzle. It is not specific
+  // enough to name a cause though: X answers it both for an unpurchased tier
+  // and for an allowance that ran out, and telling someone to upgrade when
+  // their quota merely reset is the same wrong turn a 403 read as reauth was.
+  if (res.status === 402) {
+    throw fail(
+      'upstream_error',
+      `${manifest.prefix} refused this call over billing or quota, which reconnecting will not fix`,
     )
   }
   if (res.status === 429) {

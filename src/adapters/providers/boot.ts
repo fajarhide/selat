@@ -8,6 +8,7 @@ import { gmailProvider } from './gmail.ts'
 import { notionProvider } from './notion.ts'
 import { slackProvider } from './slack.ts'
 import { threadsProvider } from './threads.ts'
+import { xProvider } from './x.ts'
 
 /**
  * The registry is booted from the environment: cloud enables per plan, a
@@ -34,6 +35,7 @@ export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
     ['NOTION_CLIENT_ID', notionProvider],
     ['SLACK_CLIENT_ID', slackProvider],
     ['THREADS_CLIENT_ID', threadsProvider],
+    ['TWITTER_CLIENT_ID', xProvider],
   ] as const
   for (const [clientId, provider] of gated) {
     if (env[clientId]) adapters.push(provider())
