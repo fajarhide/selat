@@ -166,6 +166,17 @@ describe('a grant shared by several providers', () => {
     expect(asked).toEqual(['cal.read', 'mail.read'])
   })
 
+  it('redirects to the grant, not the prefix, so one vendor registration serves all of them', async () => {
+    const mail = await beginConnection(shared(), { workspaceId, prefix: 'mail' })
+    const cal = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
+    const uriOf = (url: string) => new URL(url).searchParams.get('redirect_uri')
+    // Both prefixes come back to one address. Keyed on the prefix instead,
+    // every new prefix would need its own registration in the vendor console
+    // before it could connect at all.
+    expect(uriOf(mail.url)).toBe('https://app.example.com/v1/connections/vendor/callback')
+    expect(uriOf(cal.url)).toBe(uriOf(mail.url))
+  })
+
   it('ignores a sibling the workspace has not connected', async () => {
     const { url } = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
     expect(new URL(url).searchParams.get('scope')).toBe('cal.read')
