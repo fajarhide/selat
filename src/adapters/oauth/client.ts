@@ -9,6 +9,9 @@ export type ProviderOAuthConfig = {
   /** Vendor specific authorize parameters, such as Google's access_type. They
    *  are applied first, so none of them can overwrite the ones below. */
   authorizeParams?: Record<string, string>
+  /** Defaults to the space RFC 6749 specifies. Meta reads the Threads scope
+   *  list as comma separated and grants nothing when it is given spaces. */
+  scopeSeparator?: string
 }
 
 export type TokenSet = {
@@ -39,7 +42,7 @@ export function buildAuthorizeUrl(
   // S256 is sent even to providers that do not require PKCE. It costs nothing
   // and removes the code interception class of attack everywhere.
   url.searchParams.set('code_challenge_method', 'S256')
-  url.searchParams.set('scope', params.scopes.join(' '))
+  url.searchParams.set('scope', params.scopes.join(cfg.scopeSeparator ?? ' '))
   return url.toString()
 }
 

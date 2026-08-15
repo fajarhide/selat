@@ -7,7 +7,12 @@ import type { ProviderOAuthConfig } from './client.ts'
  */
 export const GRANT_ENDPOINTS: Record<
   string,
-  { authorizeUrl: string; tokenUrl: string; authorizeParams?: Record<string, string> }
+  {
+    authorizeUrl: string
+    tokenUrl: string
+    authorizeParams?: Record<string, string>
+    scopeSeparator?: string
+  }
 > = {
   github: {
     authorizeUrl: 'https://github.com/login/oauth/authorize',
@@ -40,6 +45,13 @@ export const GRANT_ENDPOINTS: Record<
   slack: {
     authorizeUrl: 'https://slack.com/oauth/v2/authorize',
     tokenUrl: 'https://slack.com/api/oauth.v2.access',
+  },
+  // The authorize host is threads.net while the token host is graph.threads.net,
+  // which is Meta's split and not a typo.
+  threads: {
+    authorizeUrl: 'https://threads.net/oauth/authorize',
+    tokenUrl: 'https://graph.threads.net/oauth/access_token',
+    scopeSeparator: ',',
   },
 }
 
