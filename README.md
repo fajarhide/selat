@@ -2,7 +2,7 @@
 
 **One credential for every tool your agent calls.**
 
-You are building an agent. It needs GitHub, then Jira, then Drive. Each one wants
+You are building an agent. It needs GitHub, then Gmail, then Linkedin. Each one wants
 its own OAuth dance, its own token refresh, its own schema, its own error shape.
 So you write a vault, a refresher, and a retry loop, and you write them again for
 the next agent.
