@@ -24,8 +24,16 @@ export type ConnectionDeps = {
   exchange?: typeof exchangeCode
 }
 
-export function redirectUriFor(publicUrl: string, prefix: string): string {
-  return `${publicUrl}/v1/connections/${prefix}/callback`
+/**
+ * Keyed on the grant, not the prefix. A vendor requires every redirect uri to
+ * be registered exactly, so keying on the prefix would make one google
+ * application need a separate registration for gmail, gcal and gdrive, and a
+ * fourth prefix would be a console change before it could connect at all. The
+ * callback recovers the prefix from the single-use state, so the path segment
+ * carries no decision.
+ */
+export function redirectUriFor(publicUrl: string, grantId: string): string {
+  return `${publicUrl}/v1/connections/${grantId}/callback`
 }
 
 export async function beginConnection(
@@ -36,6 +44,7 @@ export async function beginConnection(
   const cfg = deps.oauthConfig(adapter.grantId)
   const { verifier, challenge } = createPkce()
   const state = randomBytes(24).toString('base64url')
+  const enabled = await deps.enablement.enabledPrefixes(input.workspaceId)
 
   await deps.states.put({
     state,
@@ -48,12 +57,34 @@ export async function beginConnection(
   return {
     state,
     url: buildAuthorizeUrl(cfg, {
-      redirectUri: redirectUriFor(deps.publicUrl, input.prefix),
+      redirectUri: redirectUriFor(deps.publicUrl, adapter.grantId),
       state,
       challenge,
-      scopes: adapter.scopes,
+      scopes: scopesForGrant(deps.registry, adapter, enabled),
     }),
   }
+}
+
+/**
+ * One grant can back several prefixes, and the callback overwrites it whole.
+ * Asking only for the scopes of the prefix being connected therefore narrows
+ * the token every sibling reads, and the siblings start failing with a vendor
+ * 403 that no reconnect of their own would fix. So the request carries the
+ * union: this prefix, plus every already-connected prefix on the same grant.
+ */
+function scopesForGrant(
+  registry: Registry,
+  connecting: { prefix: string; grantId: string; scopes: string[] },
+  enabledPrefixes: string[],
+): string[] {
+  const wanted = new Set(connecting.scopes)
+  for (const adapter of registry.all()) {
+    if (adapter.grantId !== connecting.grantId) continue
+    if (adapter.prefix === connecting.prefix) continue
+    if (!enabledPrefixes.includes(adapter.prefix)) continue
+    for (const scope of adapter.scopes) wanted.add(scope)
+  }
+  return [...wanted].sort()
 }
 
 export async function completeConnection(
@@ -68,7 +99,7 @@ export async function completeConnection(
   const tokens: TokenSet = await exchange(deps.oauthConfig(adapter.grantId), {
     code: input.code,
     verifier: found.verifier,
-    redirectUri: redirectUriFor(deps.publicUrl, found.prefix),
+    redirectUri: redirectUriFor(deps.publicUrl, adapter.grantId),
   })
 
   await deps.grants.save(found.workspaceId, adapter.grantId, tokens)

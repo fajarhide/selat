@@ -28,6 +28,16 @@ function siblingProvider(): ProviderAdapter {
   return { ...base, id: 'fake2', prefix: 'fakb', grantId: 'fake' }
 }
 
+// Two prefixes on one grant wanting different scopes, which is the google
+// shape: gmail and a calendar provider share one OAuth application.
+function scopedSiblings(): ProviderAdapter[] {
+  const base = fakeProvider()
+  return [
+    { ...base, id: 'mail', prefix: 'mail', grantId: 'vendor', scopes: ['mail.read'] },
+    { ...base, id: 'cal', prefix: 'cal', grantId: 'vendor', scopes: ['cal.read'] },
+  ]
+}
+
 function deps(overrides: Partial<ConnectionDeps> = {}): ConnectionDeps {
   return {
     registry: createRegistry([fakeProvider(), siblingProvider()]),
@@ -131,5 +141,44 @@ describe('connections', () => {
     await disconnect(shared, { workspaceId, prefix: 'fake' })
     expect(await shared.enablement.enabledPrefixes(workspaceId)).toEqual(['fakb'])
     expect(await shared.grants.load(workspaceId, 'fake')).not.toBeNull()
+  })
+})
+
+describe('a grant shared by several providers', () => {
+  function shared() {
+    return deps({ registry: createRegistry(scopedSiblings()) })
+  }
+
+  it('asks only for its own scopes when nothing else uses the grant yet', async () => {
+    const { url } = await beginConnection(shared(), { workspaceId, prefix: 'mail' })
+    expect(new URL(url).searchParams.get('scope')).toBe('mail.read')
+  })
+
+  it('asks for every sibling scope, so connecting one does not break the other', async () => {
+    const first = shared()
+    const { state } = await beginConnection(first, { workspaceId, prefix: 'mail' })
+    await completeConnection(first, { state, code: 'code-1' })
+
+    // mail is live on this grant. Connecting cal must not hand back a token
+    // that only carries cal.read, because both prefixes read the same grant.
+    const { url } = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
+    const asked = (new URL(url).searchParams.get('scope') ?? '').split(' ').sort()
+    expect(asked).toEqual(['cal.read', 'mail.read'])
+  })
+
+  it('redirects to the grant, not the prefix, so one vendor registration serves all of them', async () => {
+    const mail = await beginConnection(shared(), { workspaceId, prefix: 'mail' })
+    const cal = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
+    const uriOf = (url: string) => new URL(url).searchParams.get('redirect_uri')
+    // Both prefixes come back to one address. Keyed on the prefix instead,
+    // every new prefix would need its own registration in the vendor console
+    // before it could connect at all.
+    expect(uriOf(mail.url)).toBe('https://app.example.com/v1/connections/vendor/callback')
+    expect(uriOf(cal.url)).toBe(uriOf(mail.url))
+  })
+
+  it('ignores a sibling the workspace has not connected', async () => {
+    const { url } = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
+    expect(new URL(url).searchParams.get('scope')).toBe('cal.read')
   })
 })

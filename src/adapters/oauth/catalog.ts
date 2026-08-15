@@ -19,7 +19,14 @@ export const GRANT_ENDPOINTS: Record<
     // Google issues a refresh token only on a consent that explicitly asks to
     // stay offline, and only re-issues one when consent is forced. Without
     // both, the grant dies an hour after it is made and cannot be refreshed.
-    authorizeParams: { access_type: 'offline', prompt: 'consent' },
+    // include_granted_scopes keeps whatever this user already approved on the
+    // same application, so adding a second google prefix widens the grant
+    // instead of replacing it even if the union we compute misses something.
+    authorizeParams: {
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: 'true',
+    },
   },
   atlassian: {
     authorizeUrl: 'https://auth.atlassian.com/authorize',
