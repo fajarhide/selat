@@ -7,7 +7,7 @@ export const gcalendarManifest: ProviderManifest = {
   // Rides the same google application as gmail. Connecting this one asks for
   // the union of both scope sets, so neither narrows the other's grant.
   grantId: 'google',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://www.googleapis.com',
   scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
   auth: { type: 'bearer' },

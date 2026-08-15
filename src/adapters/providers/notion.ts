@@ -1,6 +1,13 @@
 import { manifestProvider, type ProviderManifest } from './manifest.ts'
 import type { ProviderAdapter } from './registry.ts'
 
+/**
+ * No request in this file has reached Notion. It was written from the
+ * documentation to prove a second pagination style, and its tests run against
+ * fixtures, which catch a wrong shape and cannot catch a wrong document.
+ * github, gmail, gcal and gdrive have been driven against the real vendor;
+ * this one has not, and the difference is worth knowing before enabling it.
+ */
 export const notionManifest: ProviderManifest = {
   id: 'notion',
   prefix: 'notion',

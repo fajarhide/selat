@@ -11,7 +11,7 @@ export const gdriveManifest: ProviderManifest = {
   id: 'gdrive',
   prefix: 'gdrive',
   grantId: 'google',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://www.googleapis.com',
   scopes: ['https://www.googleapis.com/auth/drive.readonly'],
   auth: { type: 'bearer' },
