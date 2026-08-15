@@ -59,6 +59,38 @@ describe('callTool', () => {
     ).rejects.toMatchObject({ code: 'provider_not_connected' })
   })
 
+  it('stops an enabled provider with no grant before it reaches the upstream', async () => {
+    const reached = vi.fn()
+    const needy = {
+      ...fakeProvider(),
+      needsCredential: true,
+      callTool: async () => {
+        reached()
+        return { content: null, nextCursor: null, hasMore: false }
+      },
+    }
+    const ungranted = deps({
+      registry: createRegistry([needy]),
+      grants: { async accessTokenFor() { return null } },
+    })
+
+    await expect(
+      callTool(ungranted, { ...base, name: 'fake__echo', args: {} }),
+    ).rejects.toMatchObject({ code: 'provider_not_connected' })
+    // reauth_required would send someone to repair a connection they never made.
+    expect(reached).not.toHaveBeenCalled()
+  })
+
+  it('still lets a provider that needs no credential run without a grant', async () => {
+    const ungranted = deps({ grants: { async accessTokenFor() { return null } } })
+    const result = await callTool(ungranted, {
+      ...base,
+      name: 'fake__echo',
+      args: { message: 'hi' },
+    })
+    expect(result.content).toEqual({ message: 'hi' })
+  })
+
   it('rejects a tool disabled by a workspace override', async () => {
     const off = deps({
       enablement: {

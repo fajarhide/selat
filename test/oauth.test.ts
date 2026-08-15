@@ -46,6 +46,18 @@ describe('pkce', () => {
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('redirect_uri')).toBe('https://app.example.com/cb')
   })
+
+  it('carries vendor authorize params without letting them overwrite the fixed ones', () => {
+    const url = new URL(
+      buildAuthorizeUrl(
+        { ...cfg, authorizeParams: { access_type: 'offline', response_type: 'token' } },
+        { redirectUri: 'https://app.example.com/cb', state: 'st', challenge: 'ch', scopes: ['a'] },
+      ),
+    )
+    expect(url.searchParams.get('access_type')).toBe('offline')
+    // A vendor param must never downgrade the flow to an implicit grant.
+    expect(url.searchParams.get('response_type')).toBe('code')
+  })
 })
 
 describe('token exchange', () => {

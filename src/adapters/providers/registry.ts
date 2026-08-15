@@ -30,6 +30,9 @@ export interface ProviderAdapter {
   maturity: Maturity
   /** OAuth scopes this provider needs on its grant. */
   scopes: string[]
+  /** Whether a call needs a connected account. Absent means yes, because a
+   *  provider that forgot to say would otherwise send `Bearer null` upstream. */
+  needsCredential?: boolean
   listTools(): ToolDef[]
   callTool(ctx: AdapterContext, tool: string, args: unknown): Promise<ToolResult>
   mapError(err: unknown): GatewayError
