@@ -30,9 +30,14 @@ export interface ProviderAdapter {
   maturity: Maturity
   /** OAuth scopes this provider needs on its grant. */
   scopes: string[]
-  /** Whether a call needs a connected account. Absent means yes, because a
-   *  provider that forgot to say would otherwise send `Bearer null` upstream. */
-  needsCredential?: boolean
+  /**
+   * How this provider is connected. `oauth` sends a user through consent,
+   * `api_key` takes a secret the workspace pastes in, and `none` is the one
+   * provider with no upstream at all. Absent means `oauth`, so a provider that
+   * forgot to say still refuses to call with an empty credential rather than
+   * sending `Bearer null` to a vendor.
+   */
+  credential?: 'oauth' | 'api_key' | 'none'
   listTools(): ToolDef[]
   callTool(ctx: AdapterContext, tool: string, args: unknown): Promise<ToolResult>
   mapError(err: unknown): GatewayError

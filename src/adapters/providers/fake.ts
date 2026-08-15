@@ -56,7 +56,7 @@ export function fakeProvider(opts: { toolCount?: number } = {}): ProviderAdapter
     scopes: [],
     // The one provider with no upstream, which is what lets the quickstart
     // reach a real tool call before any OAuth application exists.
-    needsCredential: false,
+    credential: 'none',
     listTools: () => tools,
 
     async callTool(_ctx, tool, args) {

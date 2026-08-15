@@ -1,5 +1,6 @@
 import { createRegistry, type ProviderAdapter, type Registry } from './registry.ts'
 import { fakeProvider } from './fake.ts'
+import { discordProvider } from './discord.ts'
 import { githubProvider } from './github.ts'
 import { gcalendarProvider } from './gcalendar.ts'
 import { gdriveProvider } from './gdrive.ts'
@@ -15,9 +16,14 @@ import { threadsProvider } from './threads.ts'
  *
  * The fake provider is always present. It needs no vendor, which is what lets
  * the quickstart reach a first tool call before any OAuth application exists.
+ * So are the api key providers, for the opposite reason: there is no shared
+ * application behind them, only a secret each workspace supplies.
  */
 export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
-  const adapters: ProviderAdapter[] = [fakeProvider()]
+  // An api key provider needs no OAuth application, so there is nothing for a
+  // deployment to configure and nothing to gate on: every workspace brings its
+  // own secret through PUT /v1/connections/:prefix/key.
+  const adapters: ProviderAdapter[] = [fakeProvider(), discordProvider()]
   // Keyed on the grant's client id, not the prefix: gmail rides the google
   // application, so it appears the moment that one is configured.
   const gated = [
