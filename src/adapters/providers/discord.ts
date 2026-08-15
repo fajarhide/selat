@@ -13,12 +13,13 @@ import type { ProviderAdapter } from './registry.ts'
  * The token is workspace-wide rather than per user, so the bot sees whatever
  * the servers it was invited to let it see, and nothing else.
  *
- * Not yet driven against the real API.
+ * Driven against the real API on 2026-08-15 for everything except
+ * post_message, which writes into somebody's server and was left alone.
  */
 export const discordManifest: ProviderManifest = {
   id: 'discord',
   prefix: 'discord',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://discord.com/api/v10',
   // Discord grants a bot its permissions at invite time, in the server, so
   // there is no scope list to ask for here.
