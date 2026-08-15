@@ -41,7 +41,7 @@ export const xManifest: ProviderManifest = {
   baseUrl: 'https://api.x.com',
   // offline.access is what makes the grant refreshable. Without it the
   // connection dies in two hours and cannot be rolled.
-  scopes: ['tweet.read', 'users.read', 'offline.access'],
+  scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
   auth: { type: 'bearer' },
   // X answers 401 for a bad token and keeps 403 for an access level the app is
   // not enrolled in, which no reconnect fixes.
@@ -125,6 +125,23 @@ export const xManifest: ProviderManifest = {
       },
       items: 'data',
       fields: ['id', 'text', 'author_id', 'created_at', 'public_metrics', 'lang'],
+    },
+    {
+      name: 'create_post',
+      description: 'Publish a post to the connected account, up to 280 characters',
+      write: true,
+      request: 'POST /2/tweets',
+      args: {
+        text: { type: 'string', description: 'The post body', required: true },
+        reply_to: {
+          type: 'string',
+          description: 'Post id to reply to, which threads this under it',
+          // X nests this one, and a body param is a dotted path for exactly
+          // this reason. Sent flat it would be accepted and ignored.
+          param: 'reply.in_reply_to_tweet_id',
+        },
+      },
+      fields: ['data.id', 'data.text'],
     },
     {
       name: 'get_post',

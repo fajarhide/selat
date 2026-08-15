@@ -152,11 +152,36 @@ describe('x responses', () => {
   })
 })
 
-describe('a paywalled endpoint', () => {
-  it('says the plan is the problem rather than printing 402', async () => {
+describe('a 402 from the vendor', () => {
+  it('names billing or quota without guessing which, and rules out a reconnect', async () => {
     const gated = fakeUpstream([{ match: /search/, status: 402, body: {} }])
     const err = await x.callTool(ctx(gated), 'search_recent_posts', { query: 'a' }).catch((e) => e)
     expect(err.code).toBe('upstream_error')
-    expect(err.message).toContain('paid plan')
+    expect(err.message).toContain('billing or quota')
+    // X returns 402 for a depleted credit balance as well as an unbought tier,
+    // so a message that says "upgrade" sends half its readers the wrong way.
+    expect(err.message).not.toContain('paid plan')
+  })
+})
+
+describe('posting', () => {
+  it('nests the reply id where X expects it, not flat beside the text', async () => {
+    const upstream = fakeUpstream([{ match: /2\/tweets/, body: { data: { id: '9', text: 'hi' } } }])
+    await x.callTool(ctx(upstream), 'create_post', { text: 'hi', reply_to: '123' })
+    // Flat, X accepts the call and silently drops the threading.
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      text: 'hi',
+      reply: { in_reply_to_tweet_id: '123' },
+    })
+  })
+
+  it('sends no reply key at all when none was asked for', async () => {
+    const upstream = fakeUpstream([{ match: /2\/tweets/, body: { data: { id: '9', text: 'hi' } } }])
+    await x.callTool(ctx(upstream), 'create_post', { text: 'hi' })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ text: 'hi' })
+  })
+
+  it('is a write, so a read only credential cannot reach it', () => {
+    expect(x.listTools().find((t) => t.name === 'create_post')?.write).toBe(true)
   })
 })
