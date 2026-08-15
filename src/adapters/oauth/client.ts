@@ -9,6 +9,14 @@ export type ProviderOAuthConfig = {
   /** Vendor specific authorize parameters, such as Google's access_type. They
    *  are applied first, so none of them can overwrite the ones below. */
   authorizeParams?: Record<string, string>
+  /**
+   * How the client proves itself at the token endpoint. RFC 6749 allows the
+   * secret in the form body or as HTTP Basic, and leaves the choice to the
+   * server. X rejects the body form from a confidential client, so it needs
+   * basic. A client with no secret is public and always uses the body, which
+   * is what PKCE alone expects.
+   */
+  tokenAuth?: 'body' | 'basic'
   /** Defaults to the space RFC 6749 specifies. Meta reads the Threads scope
    *  list as comma separated and grants nothing when it is given spaces. */
   scopeSeparator?: string
@@ -78,9 +86,9 @@ export async function exchangeCode(
     redirect_uri: params.redirectUri,
     client_id: cfg.clientId,
     code_verifier: params.verifier,
-    ...(cfg.clientSecret ? { client_secret: cfg.clientSecret } : {}),
+    ...secretInBody(cfg),
   })
-  const short = await parseTokenResponse(await post(cfg.tokenUrl, body, doFetch))
+  const short = await parseTokenResponse(await post(cfg, body, doFetch))
   if (!cfg.longLived) return short
   return tradeUp(cfg, short.accessToken, cfg.longLived, doFetch)
 }
@@ -98,9 +106,9 @@ export async function refreshGrant(
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
     client_id: cfg.clientId,
-    ...(cfg.clientSecret ? { client_secret: cfg.clientSecret } : {}),
+    ...secretInBody(cfg),
   })
-  return parseTokenResponse(await post(cfg.tokenUrl, body, doFetch))
+  return parseTokenResponse(await post(cfg, body, doFetch))
 }
 
 async function tradeUp(
@@ -125,15 +133,31 @@ async function tradeUp(
   return { ...traded, refreshToken: traded.refreshToken ?? traded.accessToken }
 }
 
-async function post(url: string, body: URLSearchParams, doFetch: typeof fetch): Promise<Response> {
-  return doFetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      accept: 'application/json',
-    },
-    body,
-  })
+function usesBasic(cfg: ProviderOAuthConfig): boolean {
+  // No secret means a public client, and there is nothing to put in a Basic
+  // header, so the body form is the only one that can work.
+  return cfg.tokenAuth === 'basic' && Boolean(cfg.clientSecret)
+}
+
+function secretInBody(cfg: ProviderOAuthConfig): Record<string, string> {
+  if (!cfg.clientSecret || usesBasic(cfg)) return {}
+  return { client_secret: cfg.clientSecret }
+}
+
+async function post(
+  cfg: ProviderOAuthConfig,
+  body: URLSearchParams,
+  doFetch: typeof fetch,
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/x-www-form-urlencoded',
+    accept: 'application/json',
+  }
+  if (usesBasic(cfg)) {
+    const pair = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString('base64')
+    headers.authorization = `Basic ${pair}`
+  }
+  return doFetch(cfg.tokenUrl, { method: 'POST', headers, body })
 }
 
 async function parseTokenResponse(res: Response): Promise<TokenSet> {

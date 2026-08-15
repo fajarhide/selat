@@ -151,3 +151,12 @@ describe('x responses', () => {
     expect(err.details.retryAfter).toBeGreaterThan(60)
   })
 })
+
+describe('a paywalled endpoint', () => {
+  it('says the plan is the problem rather than printing 402', async () => {
+    const gated = fakeUpstream([{ match: /search/, status: 402, body: {} }])
+    const err = await x.callTool(ctx(gated), 'search_recent_posts', { query: 'a' }).catch((e) => e)
+    expect(err.code).toBe('upstream_error')
+    expect(err.message).toContain('paid plan')
+  })
+})

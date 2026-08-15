@@ -47,6 +47,9 @@ export const GRANT_ENDPOINTS: Record<string, GrantEndpoints> = {
   twitter: {
     authorizeUrl: 'https://x.com/i/oauth2/authorize',
     tokenUrl: 'https://api.x.com/2/oauth2/token',
+    // A confidential app must present Basic here. A public one has no secret
+    // and falls back to the body form on its own.
+    tokenAuth: 'basic',
   },
   // The authorize host is threads.net while the token host is graph.threads.net,
   // which is Meta's split and not a typo.

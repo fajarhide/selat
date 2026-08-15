@@ -7,7 +7,18 @@ import type { ProviderAdapter } from './registry.ts'
  * have to be, and X_CLIENT_ID is too generic a name to put in someone's
  * environment.
  *
- * Register the application as a **public client**. X requires HTTP Basic on
+ * Driven against a real X application on 2026-08-15: consent, PKCE, the Basic
+ * token exchange, the stored grant and get_me all work, and get_me returns the
+ * live account. The other four tools answer 402, because X gates search and
+ * timeline reads behind a paid tier. They are unproven for that reason and not
+ * for any doubt about the manifest.
+ *
+ * A confidential application works. X requires HTTP Basic at the token
+ * endpoint from one, which the grant table declares. A public client has no
+ * secret and falls back to the body form on its own, so either registration
+ * connects.
+ *
+ * Older note, kept because it is the trap: X requires HTTP Basic on
  * the token endpoint for confidential clients, which this OAuth client does not
  * send: it posts the client id in the form body, which is exactly what a public
  * client with PKCE expects. A confidential client fails at the code exchange.
@@ -26,7 +37,7 @@ export const xManifest: ProviderManifest = {
   id: 'twitter',
   prefix: 'x',
   grantId: 'twitter',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://api.x.com',
   // offline.access is what makes the grant refreshable. Without it the
   // connection dies in two hours and cannot be rolled.

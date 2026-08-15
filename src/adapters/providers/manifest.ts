@@ -369,6 +369,12 @@ async function readResponse(
         : `${manifest.prefix} refused the request, and reconnecting will not help`,
     )
   }
+  // 402 is rare enough that the bare status is a puzzle, and specific enough
+  // that it always means the same thing: the account is not paying for this
+  // endpoint. Saying so saves the reader a search.
+  if (res.status === 402) {
+    throw fail('upstream_error', `${manifest.prefix} requires a paid plan for this endpoint`)
+  }
   if (res.status === 429) {
     throw fail('rate_limited', `${manifest.prefix} asked us to slow down`, retryAfterFrom(res, rules))
   }
