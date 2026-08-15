@@ -243,7 +243,9 @@ export function adminRoutes(deps: AdminDeps): Router {
       const { tools, truncated } = await listWorkspaceTools(
         { registry: deps.registry, enablement: deps.connections.enablement },
         workspaceParam(req),
-        { includeDisabled: true },
+        // No cap. This is the only screen that can turn a tool off, and one
+        // that hides what it manages cannot manage it.
+        { includeDisabled: true, limit: null },
       )
       res.json({
         tools: tools.map((tool) => ({

@@ -64,6 +64,31 @@ describe('mcp surface', () => {
     expect(res.status).toBe(401)
   })
 
+  it('always offers the search tool, so a capped list is never a dead end', async () => {
+    const { base, token } = await startTestServer()
+    const tools = payload((await rpc(base, token, 'tools/list')).text).result.tools
+    expect(tools.map((tool: { name: string }) => tool.name)).toContain('selat__search_tools')
+  })
+
+  it('answers a search without billing for it', async () => {
+    const { base, token, pool, workspaceId } = await startTestServer()
+    const called = await rpc(base, token, 'tools/call', {
+      name: 'selat__search_tools',
+      arguments: { query: 'echo' },
+    })
+    const result = payload(called.text).result
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent.tools[0].name).toBe('fake__echo')
+
+    // The assertion that matters. Discovery reaches no upstream, and billing it
+    // teaches an agent to guess instead of search, which is the decision most
+    // likely to be undone by accident later.
+    const { rows } = await pool.query('SELECT count(*)::int AS n FROM usage_events WHERE workspace_id = $1', [
+      workspaceId,
+    ])
+    expect(rows[0].n).toBe(0)
+  })
+
   it('exposes exactly the tools the REST catalog exposes', async () => {
     const { base, token } = await startTestServer()
     const rest = await json(

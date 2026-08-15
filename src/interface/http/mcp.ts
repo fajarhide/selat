@@ -5,7 +5,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { CallDeps } from '../../application/call-tool.ts'
 import { meteredCall } from '../../application/metering.ts'
 import type { Pool } from '../../adapters/db/pool.ts'
-import { listWorkspaceTools } from '../../application/catalog.ts'
+import { listWorkspaceTools, TOOL_BUDGET } from '../../application/catalog.ts'
+import { callSearchTool, searchToolDefinition, SEARCH_TOOL } from '../../application/meta-tools.ts'
 import { scopeAllowsProvider } from '../../domain/credential.ts'
 import { toEnvelope } from '../../domain/errors.ts'
 
@@ -23,28 +24,51 @@ export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
     const requestId = req.requestId
 
     server.setRequestHandler(ListToolsRequestSchema, async () => {
-      const { tools } = await listWorkspaceTools(deps, gateway.workspaceId)
+      // Fetched whole and capped after the scope filter, so the count the meta
+      // tool reports is what this credential can actually reach, and a
+      // provider-scoped bearer never learns that other providers are connected.
+      const { tools } = await listWorkspaceTools(deps, gateway.workspaceId, { limit: null })
+      const visible = tools.filter((tool) => scopeAllowsProvider(gateway.scope, tool.provider))
+      const listed = visible.slice(0, TOOL_BUDGET)
+      const meta =
+        visible.length === 0
+          ? []
+          : [searchToolDefinition(visible.length, visible.length - listed.length)]
       return {
-        tools: tools
-          .filter((tool) => scopeAllowsProvider(gateway.scope, tool.provider))
-          .map((tool) => ({
+        tools: [
+          ...listed.map((tool) => ({
             name: tool.name,
             description: tool.description,
             inputSchema: tool.inputSchema,
           })),
+          ...meta.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          })),
+        ],
       }
     })
 
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
-        const result = await meteredCall(pool, deps, {
-          workspaceId: gateway.workspaceId,
-          credentialId: gateway.credentialId,
-          scope: gateway.scope,
-          name: request.params.name,
-          args: request.params.arguments ?? {},
-          requestId,
-        })
+        // Branched before metering on purpose. Discovery makes no upstream
+        // request, and billing it teaches an agent to guess instead of search.
+        const result =
+          request.params.name === SEARCH_TOOL
+            ? await callSearchTool(deps, {
+                workspaceId: gateway.workspaceId,
+                scope: gateway.scope,
+                args: request.params.arguments ?? {},
+              })
+            : await meteredCall(pool, deps, {
+                workspaceId: gateway.workspaceId,
+                credentialId: gateway.credentialId,
+                scope: gateway.scope,
+                name: request.params.name,
+                args: request.params.arguments ?? {},
+                requestId,
+              })
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result.content) }],
           structuredContent: asStructured(result.content),
