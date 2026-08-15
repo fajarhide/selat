@@ -367,6 +367,19 @@ describe('manifest executor: errors', () => {
     expect(neither.details.retryAfter).toBe(60)
   })
 
+  it('lets a provider say a bare 403 is not about the credential', async () => {
+    const google = manifestProvider({ ...base, errors: { forbidden: 'upstream_error' } })
+    const refused = await callWith(
+      fakeUpstream([{ match: /boxes/, status: 403, body: {} }]),
+      google,
+    )
+    expect(refused.code).toBe('upstream_error')
+
+    // A 401 still means the credential, whatever the 403 was declared to mean.
+    const stale = await callWith(fakeUpstream([{ match: /boxes/, status: 401, body: {} }]), google)
+    expect(stale.code).toBe('reauth_required')
+  })
+
   it('maps 401 to reauth, 429 to rate limited and anything else to upstream_error', async () => {
     expect((await callWith(fakeUpstream([{ match: /boxes/, status: 401, body: {} }]))).code).toBe(
       'reauth_required',

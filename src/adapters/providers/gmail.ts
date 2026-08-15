@@ -11,6 +11,10 @@ export const gmailManifest: ProviderManifest = {
   baseUrl: 'https://gmail.googleapis.com',
   scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
   auth: { type: 'bearer' },
+  // Google answers 401 when the credential is bad. A 403 is something else,
+  // most often an API that was never enabled on the project, and telling
+  // someone to reconnect a healthy grant sends them the wrong way.
+  errors: { forbidden: 'upstream_error' },
   pagination: {
     style: 'cursor',
     size: 25,

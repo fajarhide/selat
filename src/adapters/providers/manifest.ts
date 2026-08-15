@@ -30,6 +30,11 @@ export type Pagination =
     }
 
 export type ErrorRules = {
+  /** What a bare 403 means here. Defaults to reauth_required, which is right
+   *  for a vendor that answers 403 for a revoked credential. Google is not
+   *  one: it answers 401 for that, and keeps 403 for things reconnecting
+   *  cannot fix, such as an API that was never enabled. */
+  forbidden?: ErrorCode
   rateLimited?: { status: number; header: string; equals: string }
   retryAfter?: { header: string; as: 'seconds' | 'epoch' }[]
   bodyFailure?: {
@@ -307,8 +312,17 @@ async function readResponse(
   if (limit && res.status === limit.status && res.headers.get(limit.header) === limit.equals) {
     throw fail('rate_limited', `${manifest.prefix} rate limit reached`, retryAfterFrom(res, rules))
   }
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     throw fail('reauth_required', `${manifest.prefix} rejected the credential`)
+  }
+  if (res.status === 403) {
+    const code = rules.forbidden ?? 'reauth_required'
+    throw fail(
+      code,
+      code === 'reauth_required'
+        ? `${manifest.prefix} rejected the credential`
+        : `${manifest.prefix} refused the request, and reconnecting will not help`,
+    )
   }
   if (res.status === 429) {
     throw fail('rate_limited', `${manifest.prefix} asked us to slow down`, retryAfterFrom(res, rules))
