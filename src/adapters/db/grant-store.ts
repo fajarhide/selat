@@ -67,5 +67,31 @@ export function grantStore(pool: Pool, key: Buffer): GrantStore {
         grantId,
       ])
     },
+
+    // The transaction is only a handle to hold the lock on: the callback writes
+    // through the pool on its own connection, so nothing here is rolled back.
+    // A refresh is one vendor round trip, so a waiter that is still blocked
+    // after LOCK_TIMEOUT is queued behind something wedged, and failing the
+    // call beats holding a pooled connection open for it.
+    async withRefreshLock(workspaceId, grantId, fn) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`)
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+          `${workspaceId}:${grantId}`,
+        ])
+        try {
+          return await fn()
+        } finally {
+          // The lock is bound to the transaction, so it ends either way.
+          await client.query('COMMIT')
+        }
+      } finally {
+        client.release()
+      }
+    },
   }
 }
+
+const LOCK_TIMEOUT = '5s'
