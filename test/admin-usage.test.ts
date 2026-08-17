@@ -203,8 +203,14 @@ describe('admin meter window', () => {
     expect(first.calls).toBe(3)
 
     const cursor = new Date(first.until)
+    const newest = new Date(cursor.getTime() + 2)
     await seedEvent(ws, { createdAt: new Date(cursor.getTime() + 1) })
-    await seedEvent(ws, { createdAt: new Date(cursor.getTime() + 2) })
+    await seedEvent(ws, { createdAt: newest })
+    // The window closes at the database clock, so an event stamped ahead of it
+    // is not billable yet. These two sit 1ms and 2ms past the cursor, and two
+    // inserts do not always take that long, which returned 1 about once in ten
+    // full-suite runs.
+    while ((await dbNow()) < newest) continue
 
     const second = await json(await fetch(meterUrl(ws, first.until), { headers: auth }))
     expect(second.calls).toBe(2)
