@@ -4,6 +4,7 @@ import { createServer } from '../src/server.ts'
 import type { Config } from '../src/config.ts'
 import type { Pool } from '../src/adapters/db/pool.ts'
 import { bootRegistry } from '../src/adapters/providers/boot.ts'
+import { listenBelowEphemeral } from './helpers/server.ts'
 
 const config: Config = {
   port: 0,
@@ -16,8 +17,7 @@ let running: Server | undefined
 afterEach(() => running?.close())
 
 async function listen(pool: Pool): Promise<string> {
-  const server = createServer({ pool, config, registry: bootRegistry() }).listen(0)
-  await new Promise((resolve) => server.once('listening', resolve))
+  const server = await listenBelowEphemeral(createServer({ pool, config, registry: bootRegistry() }))
   running = server
   const address = server.address() as { port: number }
   return `http://127.0.0.1:${address.port}`

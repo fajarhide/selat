@@ -29,7 +29,9 @@ let nextPort = 34000
  * server. EADDRINUSE is expected: forks overlap while the previous one tears
  * down, so walk to the next port rather than failing the test.
  */
-async function listenBelowEphemeral(app: ReturnType<typeof createServer>): Promise<Server> {
+export async function listenBelowEphemeral(app: {
+  listen(port: number, host: string): Server
+}): Promise<Server> {
   while (nextPort < EPHEMERAL_FLOOR) {
     const port = nextPort
     nextPort += 1

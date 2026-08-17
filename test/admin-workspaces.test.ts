@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer } from '../src/server.ts'
 import { bootRegistry } from '../src/adapters/providers/boot.ts'
-import { testConfig } from './helpers/server.ts'
+import { listenBelowEphemeral, testConfig } from './helpers/server.ts'
 import { resetDb, testPool } from './helpers/db.ts'
 import { json } from './helpers/http.ts'
 import type { Server } from 'node:http'
@@ -15,12 +15,13 @@ const auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/js
 beforeAll(async () => {
   const pool = await testPool()
   await resetDb(pool)
-  server = createServer({
-    pool,
-    config: { ...testConfig, serviceToken: TOKEN },
-    registry: bootRegistry(),
-  }).listen(0)
-  await new Promise((resolve) => server.once('listening', resolve))
+  server = await listenBelowEphemeral(
+    createServer({
+      pool,
+      config: { ...testConfig, serviceToken: TOKEN },
+      registry: bootRegistry(),
+    }),
+  )
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
 })
 
