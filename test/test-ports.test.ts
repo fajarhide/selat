@@ -14,7 +14,7 @@ describe('test server ports', () => {
   // unrelated local process can already hold the port the suite then addresses.
   it('binds below the ephemeral range, and each server gets its own port', async () => {
     const first = await startTestServer()
-    const second = await startTestServer({ reset: false })
+    const second = await startTestServer()
 
     for (const started of [first, second]) {
       expect((started.server.address() as { port: number }).port).toBeLessThan(EPHEMERAL_FLOOR)

@@ -4,7 +4,7 @@ import { mintCredential, type CredentialScope } from '../../src/domain/credentia
 import { createServer, type ServerDeps } from '../../src/server.ts'
 import type { Config } from '../../src/config.ts'
 import type { Pool } from '../../src/adapters/db/pool.ts'
-import { resetDb, seedWorkspace, testPool } from './db.ts'
+import { seedWorkspace, testPool } from './db.ts'
 
 export const testConfig: Config = {
   port: 0,
@@ -53,7 +53,6 @@ export async function startTestServer(
   opts: {
     scope?: CredentialScope
     enable?: string[]
-    reset?: boolean
     overrides?: Partial<ServerDeps>
   } = {},
 ): Promise<{
@@ -64,7 +63,6 @@ export async function startTestServer(
   server: Server
 }> {
   const pool = await testPool()
-  if (opts.reset !== false) await resetDb(pool)
 
   const workspaceId = await seedWorkspace(pool)
   const { token, hash, last4 } = mintCredential('live')

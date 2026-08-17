@@ -12,10 +12,6 @@ export async function testPool(): Promise<Pool> {
   return pool
 }
 
-export async function resetDb(pool: Pool): Promise<void> {
-  await pool.query('TRUNCATE workspaces CASCADE')
-}
-
 export async function seedWorkspace(pool: Pool, name = 'acme'): Promise<string> {
   const { rows } = await pool.query('INSERT INTO workspaces (name) VALUES ($1) RETURNING id', [name])
   return rows[0].id as string

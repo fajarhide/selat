@@ -10,14 +10,13 @@ import { fakeProvider } from '../src/adapters/providers/fake.ts'
 import { stateStore } from '../src/adapters/db/state-store.ts'
 import { grantStore } from '../src/adapters/db/grant-store.ts'
 import { enablementStore } from '../src/adapters/db/enablement-store.ts'
-import { resetDb, seedWorkspace, testPool } from './helpers/db.ts'
+import { seedWorkspace, testPool } from './helpers/db.ts'
 
 const pool = await testPool()
 afterAll(() => pool.end())
 
 let workspaceId = ''
 beforeEach(async () => {
-  await resetDb(pool)
   workspaceId = await seedWorkspace(pool)
 })
 
@@ -117,7 +116,11 @@ describe('connections', () => {
     await expect(completeConnection(shared, { state, code: 'c' })).rejects.toMatchObject({
       code: 'invalid_arguments',
     })
-    const left = await pool.query('SELECT count(*)::int AS n FROM oauth_states')
+    // Scoped to this state rather than counting the table: the claim is that
+    // the expired row was swept, not that the database is otherwise empty.
+    const left = await pool.query('SELECT count(*)::int AS n FROM oauth_states WHERE state = $1', [
+      state,
+    ])
     expect(left.rows[0].n).toBe(0)
   })
 
