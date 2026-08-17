@@ -346,7 +346,18 @@ async function readResponse(
 
   // Parsed before the status is looked at, because Slack answers 200 with
   // {ok: false} and the status carries no signal at all.
-  const body = res.ok ? await res.json() : failure ? await res.json().catch(() => undefined) : undefined
+  // Read once, whatever the outcome. On a failure the text is the only thing
+  // that says why, and a Response body cannot be read twice.
+  const failureText = res.ok ? undefined : await res.text().catch(() => '')
+  const body = res.ok
+    ? await res.json()
+    : ((): unknown => {
+        try {
+          return JSON.parse(failureText ?? '')
+        } catch {
+          return undefined
+        }
+      })()
 
   if (failure && getPath(body, failure.path) === failure.equals) {
     const raw = getPath(body, failure.codeFrom)
@@ -387,7 +398,17 @@ async function readResponse(
   if (res.status === 429) {
     throw fail('rate_limited', `${manifest.prefix} asked us to slow down`, retryAfterFrom(res, rules))
   }
-  if (!res.ok) throw fail('upstream_error', `${manifest.prefix} returned ${res.status}`)
+  if (!res.ok) {
+    // The status alone sends the reader back to the vendor's console to guess.
+    // Bounded so an HTML error page cannot flood one log line.
+    const reason = (failureText ?? '').trim().slice(0, 400)
+    throw fail(
+      'upstream_error',
+      reason
+        ? `${manifest.prefix} returned ${res.status}: ${reason}`
+        : `${manifest.prefix} returned ${res.status}`,
+    )
+  }
 
   if (!paging || !tool.items) {
     return { content: project(body, tool.fields), nextCursor: null, hasMore: false }
