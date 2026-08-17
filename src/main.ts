@@ -4,7 +4,7 @@ import { createServer } from './server.ts'
 import { bootRegistry } from './adapters/providers/boot.ts'
 
 const config = loadConfig()
-const pool = createPool(config.databaseUrl)
+const pool = createPool(config.databaseUrl, config.poolMax)
 await runMigrations(pool)
 
 const server = createServer({ pool, config, registry: bootRegistry() }).listen(config.port, () => {
