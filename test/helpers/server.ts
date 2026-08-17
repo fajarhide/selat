@@ -15,6 +15,34 @@ export const testConfig: Config = {
 
 const open: Server[] = []
 
+/** macOS hands ephemeral ports out from here up, and so does `listen(0)`. */
+export const EPHEMERAL_FLOOR = 49152
+
+let nextPort = 34000
+
+/**
+ * `listen(0)` draws from the same ephemeral range every other process on the
+ * machine binds at random, so a suite that uses it occasionally addresses a
+ * port some unrelated local server holds. That is how a GET here came back as
+ * a bare 405 from a browser agent process rather than from any route in this
+ * repo (#14). Binding below the floor keeps the suite talking to its own
+ * server. EADDRINUSE is expected: forks overlap while the previous one tears
+ * down, so walk to the next port rather than failing the test.
+ */
+async function listenBelowEphemeral(app: ReturnType<typeof createServer>): Promise<Server> {
+  while (nextPort < EPHEMERAL_FLOOR) {
+    const port = nextPort
+    nextPort += 1
+    const server = app.listen(port, '127.0.0.1')
+    const bound = await new Promise<boolean>((resolve) => {
+      server.once('listening', () => resolve(true))
+      server.once('error', () => resolve(false))
+    })
+    if (bound) return server
+  }
+  throw new Error('no free port below the ephemeral range')
+}
+
 export async function closeTestServers(): Promise<void> {
   await Promise.all(open.splice(0).map((server) => new Promise((r) => server.close(r))))
 }
@@ -54,13 +82,13 @@ export async function startTestServer(
     ])
   }
 
-  const server = createServer({
+  const app = createServer({
     pool,
     config: testConfig,
     registry: bootRegistry(),
     ...opts.overrides,
-  }).listen(0)
-  await new Promise((resolve) => server.once('listening', resolve))
+  })
+  const server = await listenBelowEphemeral(app)
   open.push(server)
 
   const address = server.address() as { port: number }
