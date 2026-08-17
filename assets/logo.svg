@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Selat">
+  <title>Selat</title>
+  <!--
+    Selat is Indonesian for strait: the narrow passage every ship has to pass
+    through. Two coasts bow toward each other until the water between them is a
+    slot, and one thing is in the slot.
+
+    The coasts are strokes with round caps rather than filled rectangles. A
+    first attempt filled them and the flat outer edges took over the mark, which
+    read as a merge icon rather than as land. Ends that curve away are what make
+    the eye read coastline.
+
+    The gap is the whole design, so nothing else competes with it: no wordmark
+    inside the case, no second accent. At 16px the two bows survive and the dot
+    goes first, which is the right order to lose things in.
+
+    Colours are converted from @weekndlabs/design tokens, not re-picked. The
+    case runs neutral-850 to neutral-900, the pair that themes a dark surface.
+    The land runs blue.dark to blue.light, and blue.dark converts to #409CFF,
+    the same value OMNI's mark already carries, so the two sit in one family
+    without either having sampled the other.
+
+    The artwork lives in a nested <svg> with its own 256 viewBox, so it is
+    centred and scaled by the renderer. Editing the mark means editing two
+    stroke paths and one circle.
+  -->
+  <defs>
+    <linearGradient id="selat-land" x1="256" y1="96" x2="256" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#409cff"/>
+      <stop offset="1" stop-color="#006cdb"/>
+    </linearGradient>
+    <linearGradient id="selat-case" x1="256" y1="0" x2="256" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c1c1e"/>
+      <stop offset="1" stop-color="#141416"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="url(#selat-case)"/>
+
+  <svg x="72" y="72" width="368" height="368" viewBox="0 0 256 256">
+    <g stroke="url(#selat-land)" stroke-width="44" stroke-linecap="round" fill="none">
+      <!-- West coast, bowing east. -->
+      <path d="M 50 28 C 107 84, 107 172, 50 228"/>
+      <!-- East coast. Its bow is shallower, so the channel is not a symmetric
+           waist: a strait has two different shores, and a mirrored pair reads
+           as an hourglass. -->
+      <path d="M 202 34 C 155 88, 155 168, 202 222"/>
+    </g>
+    <!-- What passes through. -->
+    <circle cx="130" cy="128" r="11" fill="#f5f5f7"/>
+  </svg>
+</svg>
