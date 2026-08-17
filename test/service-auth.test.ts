@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { requireService } from '../src/interface/http/service.ts'
 import { errorHandler, withRequestContext } from '../src/interface/http/context.ts'
 import { json } from './helpers/http.ts'
+import { listenBelowEphemeral } from './helpers/server.ts'
 
 const TOKEN = 'slt_svc_0123456789abcdef0123456789abcdef0123456789a'
 const servers: import('node:http').Server[] = []
@@ -14,8 +15,7 @@ async function start(token: string | undefined): Promise<string> {
     res.json({ workspace_id: req.params.workspaceId })
   })
   app.use(errorHandler())
-  const server = app.listen(0)
-  await new Promise((resolve) => server.once('listening', resolve))
+  const server = await listenBelowEphemeral(app)
   servers.push(server)
   return `http://127.0.0.1:${(server.address() as { port: number }).port}`
 }
