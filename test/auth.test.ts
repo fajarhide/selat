@@ -1,11 +1,10 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { mintCredential } from '../src/domain/credential.ts'
 import { credentialStore } from '../src/adapters/db/credential-store.ts'
-import { resetDb, seedWorkspace, testPool } from './helpers/db.ts'
+import { seedWorkspace, testPool } from './helpers/db.ts'
 
 const pool = await testPool()
 afterAll(() => pool.end())
-beforeEach(() => resetDb(pool))
 
 describe('credential store', () => {
   it('resolves the workspace behind a valid token', async () => {

@@ -1,13 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { assertQuota, recordAudit, recordCall } from '../src/application/metering.ts'
-import { resetDb, seedWorkspace, testPool } from './helpers/db.ts'
+import { seedWorkspace, testPool } from './helpers/db.ts'
 
 const pool = await testPool()
 afterAll(() => pool.end())
 
 let workspaceId = ''
 beforeEach(async () => {
-  await resetDb(pool)
   workspaceId = await seedWorkspace(pool)
 })
 
