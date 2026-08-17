@@ -41,6 +41,11 @@ export type LongLivedExchange = {
   params: Record<string, string>
   /** Meta wants the secret on the first trade and refuses it on the refresh. */
   withClientSecret?: boolean
+  /**
+   * Meta's two token trades differ here: th_exchange_token takes the secret
+   * alone, fb_exchange_token refuses the call without the app id as well.
+   */
+  withClientId?: boolean
 }
 
 export type TokenSet = {
@@ -120,6 +125,7 @@ async function tradeUp(
   const url = new URL(step.url)
   for (const [key, value] of Object.entries(step.params)) url.searchParams.set(key, value)
   url.searchParams.set(step.tokenParam, token)
+  if (step.withClientId) url.searchParams.set('client_id', cfg.clientId)
   if (step.withClientSecret && cfg.clientSecret) {
     url.searchParams.set('client_secret', cfg.clientSecret)
   }
@@ -160,9 +166,28 @@ async function post(
   return doFetch(cfg.tokenUrl, { method: 'POST', headers, body })
 }
 
+/**
+ * Bounded because a vendor that answers a token call with an HTML error page
+ * would otherwise put the whole page in one log line.
+ */
+const REASON_LIMIT = 400
+
 async function parseTokenResponse(res: Response): Promise<TokenSet> {
   if (!res.ok) {
-    throw new GatewayError('upstream_error', `token endpoint returned ${res.status}`)
+    // Read on the failure path only. A successful body carries the tokens, and
+    // the reason a vendor gives here is the difference between a first
+    // connection that can be debugged and one that costs another consent round
+    // trip to diagnose.
+    const reason = await res
+      .text()
+      .then((text) => text.trim().slice(0, REASON_LIMIT))
+      .catch(() => '')
+    throw new GatewayError(
+      'upstream_error',
+      reason
+        ? `token endpoint returned ${res.status}: ${reason}`
+        : `token endpoint returned ${res.status}`,
+    )
   }
   const json = (await res.json()) as Record<string, unknown>
   if (typeof json.access_token !== 'string') {

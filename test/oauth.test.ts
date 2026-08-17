@@ -83,14 +83,30 @@ describe('token exchange', () => {
     expect(tokens.refreshToken).toBeNull()
   })
 
-  it('rejects a token endpoint failure', async () => {
+  it('rejects a token endpoint failure and carries the vendor reason', async () => {
+    // The status alone costs another consent round trip to diagnose, because
+    // the code is single use and the state row is gone by then.
     await expect(
       exchangeCode(
         cfg,
         { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' },
-        tokenResponder({ error: 'invalid_grant' }, 400),
+        tokenResponder({ error: { message: 'Invalid verification code format.' } }, 400),
       ),
-    ).rejects.toBeInstanceOf(GatewayError)
+    ).rejects.toMatchObject({
+      code: 'upstream_error',
+      message: expect.stringContaining('Invalid verification code format.'),
+    })
+  })
+
+  it('bounds the reason, so an HTML error page cannot flood the log line', async () => {
+    const flood = `<html>${'x'.repeat(5000)}</html>`
+    const thrown = await exchangeCode(
+      cfg,
+      { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' },
+      () => Promise.resolve(new Response(flood, { status: 502 })),
+    ).catch((err: GatewayError) => err)
+    expect(thrown).toBeInstanceOf(GatewayError)
+    expect((thrown as GatewayError).message.length).toBeLessThan(500)
   })
 
   it('rejects a response with no access token', async () => {
@@ -172,6 +188,20 @@ describe('a vendor that hands back a short lived token', () => {
     expect(traded.searchParams.get('grant_type')).toBe('th_exchange_token')
     expect(traded.searchParams.get('access_token')).toBe('one-hour')
     expect(traded.searchParams.get('client_secret')).toBe('app-secret')
+    // Threads takes the secret alone, so the app id must stay off this call.
+    expect(traded.searchParams.get('client_id')).toBeNull()
+  })
+
+  it('sends the app id on a trade that asks for it, which Facebook does', async () => {
+    const { doFetch, calls } = twoStep()
+    await exchangeCode(
+      { ...meta, longLived: { ...meta.longLived, withClientId: true } },
+      { code: 'c', verifier: 'v', redirectUri: 'https://app.example.com/cb' },
+      doFetch,
+    )
+    // Without it Facebook answers "Missing client_id parameter", after the code
+    // has already been spent, so every retry costs another consent.
+    expect(new URL(calls[1] as string).searchParams.get('client_id')).toBe(meta.clientId)
   })
 
   it('keeps the long token as its own refresh credential', async () => {

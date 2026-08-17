@@ -64,6 +64,9 @@ export const GRANT_ENDPOINTS: Record<string, GrantEndpoints> = {
       url: 'https://graph.facebook.com/oauth/access_token',
       tokenParam: 'fb_exchange_token',
       params: { grant_type: 'fb_exchange_token' },
+      // Facebook refuses this call without the app id, and answers
+      // "Missing client_id parameter" after the code has already been spent.
+      withClientId: true,
       withClientSecret: true,
     },
     // No longLivedRefresh on purpose. Facebook has no th_refresh_token
