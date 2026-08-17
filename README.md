@@ -233,6 +233,79 @@ a public issue.
 | `GET /v1/whoami` | Workspace, plan, connected providers. No secrets |
 | `GET /v1/health`, `GET /v1/ready` | Liveness and readiness |
 
+## Deploying it yourself
+
+One long lived process, Postgres on the same host, and a reverse proxy in front
+doing TLS. Nothing in the gateway is stateful between requests, but it does hold
+a connection pool and refresh tokens in flight, so it wants to be a server rather
+than a function. On a serverless platform every instance opens its own pool
+against a ceiling they all share, and the database has to be reachable from the
+public internet for any of it to work.
+
+```sh
+sudo apt-get install -y postgresql
+sudo -u postgres createuser --pwprompt selat
+sudo -u postgres createdb -O selat selat
+
+git clone https://github.com/fajarhide/selat.git /opt/selat
+sudo podman build -t selat:latest /opt/selat
+```
+
+Keep the environment in a root owned file rather than in the unit, so
+`systemctl show` never prints `VAULT_KEY`:
+
+```sh
+sudo install -d -m 750 /etc/selat
+sudo tee /etc/selat/selat.env >/dev/null <<'EOF'
+PORT=8081
+DATABASE_URL=postgres://selat:...@127.0.0.1:5432/selat
+VAULT_KEY=...
+PUBLIC_URL=https://api.example.com
+EOF
+sudo chmod 600 /etc/selat/selat.env
+```
+
+Run it under systemd with a podman quadlet at
+`/etc/containers/systemd/selat.container`:
+
+```ini
+[Unit]
+After=postgresql.service
+Requires=postgresql.service
+
+[Container]
+Image=localhost/selat:latest
+Network=host
+EnvironmentFile=/etc/selat/selat.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`Network=host` is deliberate. The alternative is a bridge network, which forces
+Postgres to listen on an interface the container network can reach. This way it
+stays on localhost and only the proxy is exposed.
+
+Run `systemctl daemon-reload && systemctl start selat`, then point the proxy at
+`127.0.0.1:8081` and check `/v1/ready`. With Caddy that is three lines:
+
+```
+api.example.com {
+	reverse_proxy 127.0.0.1:8081
+}
+```
+
+Migrations run at start, so a fresh database needs no separate step. Redeploying
+is a pull, a build and a restart.
+
+Podman writes an OCI spec that older crun rejects, and the build then dies at
+`RUN npm ci` with `unknown version specified`, which reads like an npm problem
+and is not. If podman came from a newer release than the rest of the system,
+upgrade crun from the same place.
+
 ## Writing a provider
 
 Implement `ProviderAdapter` in `src/adapters/providers/`, then run the
