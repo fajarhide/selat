@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeTestServers, startTestServer, testConfig } from './helpers/server.ts'
+import { bootRegistry } from '../src/adapters/providers/boot.ts'
 import { testPool } from './helpers/db.ts'
 import { json } from './helpers/http.ts'
 
@@ -165,5 +166,82 @@ describe('admin connections', () => {
     })
     expect(res.status).toBe(404)
     expect((await json(res)).error.code).toBe('tool_not_found')
+  })
+})
+
+// The portal drove every provider through authorize, so discord answered 400
+// and the portal turned it into a 500. It needs to read the credential kind off
+// the list, and it needs somewhere to put the key once it asks for one.
+describe('admin connections for a provider that takes a key', () => {
+  const KEY = 'MTIzNDU2Nzg5.Gabcde.a-real-looking-bot-token'
+
+  const putKey = (base: string, workspaceId: string, prefix: string, api_key: unknown) =>
+    fetch(`${base}/v1/admin/workspaces/${workspaceId}/connections/${prefix}/key`, {
+      method: 'PUT',
+      headers: svc,
+      body: JSON.stringify({ api_key }),
+    })
+
+  it('names the credential kind so consent and key providers can be told apart', async () => {
+    // bootRegistry leaves out a provider with no client id, so github is only
+    // in the list when one is configured.
+    const { base, workspaceId } = await startTestServer({
+      enable: [],
+      overrides: {
+        ...fakeVendor,
+        config: { ...testConfig, serviceToken: TOKEN, dashboardUrl: DASHBOARD },
+        registry: bootRegistry({ ...process.env, GITHUB_CLIENT_ID: 'cid' }),
+      },
+    })
+    const listed = await json(
+      await fetch(`${base}/v1/admin/workspaces/${workspaceId}/connections`, { headers: svc }),
+    )
+    expect(listed.connections).toContainEqual(
+      expect.objectContaining({ provider: 'discord', credential: 'api_key', connected: false }),
+    )
+    expect(listed.connections).toContainEqual(
+      expect.objectContaining({ provider: 'github', credential: 'oauth' }),
+    )
+  })
+
+  it('stores the key encrypted, turns the provider on and never echoes it back', async () => {
+    const { base, pool, workspaceId } = await start([])
+    const res = await putKey(base, workspaceId, 'discord', KEY)
+    expect(res.status).toBe(200)
+    const body = await json(res)
+    expect(body).toMatchObject({ connected: 'discord' })
+    expect(JSON.stringify(body)).not.toContain(KEY.slice(0, 12))
+
+    const stored = await pool.query(
+      'SELECT access_token FROM grants WHERE workspace_id = $1 AND grant_id = $2',
+      [workspaceId, 'discord'],
+    )
+    expect(stored.rowCount).toBe(1)
+    expect(JSON.stringify(stored.rows[0].access_token)).not.toContain(KEY)
+
+    const listed = await json(
+      await fetch(`${base}/v1/admin/workspaces/${workspaceId}/connections`, { headers: svc }),
+    )
+    expect(listed.connections).toContainEqual(
+      expect.objectContaining({ provider: 'discord', connected: true }),
+    )
+
+    const audit = await pool.query(
+      'SELECT actor, action, target FROM audit_log WHERE workspace_id = $1 ORDER BY id',
+      [workspaceId],
+    )
+    expect(audit.rows).toEqual([
+      { actor: 'service', action: 'connection.key_set', target: 'discord' },
+    ])
+  })
+
+  it('refuses a key for a provider that does not take one, a non string, a blank one and an unknown workspace', async () => {
+    const { base, workspaceId } = await start([])
+    expect((await putKey(base, workspaceId, 'fake', KEY)).status).toBe(400)
+    expect((await putKey(base, workspaceId, 'discord', 42)).status).toBe(400)
+    expect((await putKey(base, workspaceId, 'discord', '   ')).status).toBe(400)
+    expect(
+      (await putKey(base, '00000000-0000-0000-0000-000000000000', 'discord', KEY)).status,
+    ).toBe(404)
   })
 })

@@ -18,6 +18,7 @@ import { pathParam } from './connections.ts'
 import {
   beginConnection,
   disconnect,
+  setApiKey,
   type ConnectionDeps,
 } from '../../application/connections.ts'
 
@@ -182,6 +183,10 @@ export function adminRoutes(deps: AdminDeps): Router {
           grant: adapter.grantId,
           maturity: adapter.maturity,
           scopes: adapter.scopes,
+          // The portal has to know whether to open a consent window or ask for
+          // a secret, and the prefix does not say. Without this it offers
+          // Connect for every provider and the api_key ones answer 400.
+          credential: adapter.credential ?? 'oauth',
           connected: enabled.includes(adapter.prefix),
         })),
         request_id: req.requestId,
@@ -213,6 +218,36 @@ export function adminRoutes(deps: AdminDeps): Router {
           requestId: req.requestId,
         })
         res.json({ authorize_url: url, request_id: req.requestId })
+      } catch (err) {
+        next(err)
+      }
+    },
+  )
+
+  // The service-token twin of PUT /v1/connections/:prefix/key. The portal holds
+  // the service token and never the workspace credential, so without this route
+  // there is no way for it to connect a provider that takes a key at all.
+  router.put(
+    '/v1/admin/workspaces/:workspaceId/connections/:prefix/key',
+    async (req, res, next) => {
+      try {
+        const workspaceId = workspaceParam(req)
+        await readWorkspace(deps.pool, workspaceId)
+        const prefix = pathParam(req, 'prefix')
+        if (typeof req.body?.api_key !== 'string') {
+          throw new GatewayError('invalid_arguments', 'api_key must be a string')
+        }
+        await setApiKey(deps.connections, { workspaceId, prefix, key: req.body.api_key })
+        // The key itself is never echoed back, not even its tail, so the audit
+        // row records that it changed and nothing about what it is.
+        await recordAudit(deps.pool, {
+          workspaceId,
+          actor: 'service',
+          action: 'connection.key_set',
+          target: prefix,
+          requestId: req.requestId,
+        })
+        res.json({ connected: prefix, request_id: req.requestId })
       } catch (err) {
         next(err)
       }
