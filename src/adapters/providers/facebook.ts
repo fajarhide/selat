@@ -13,29 +13,23 @@ import type { ProviderAdapter } from './registry.ts'
  * schedule, so the wrong guess would fail every call for a reason nothing in
  * the error explains. Pin it once the console shows which version the app is on.
  *
- * Unproven against the vendor: the fixtures below are written from the
- * documentation, which catches a wrong shape and cannot catch a wrong document.
+ * Proven against Meta on 2026-08-17: a real connection completes and get_me
+ * returns a real profile.
+ *
+ * It carries one tool because Meta refuses the rest. list_my_posts on /me/posts
+ * and list_liked_pages on /me/likes were written from the documentation, passed
+ * their fixtures, and are refused by the live API with error_subcode 2069030,
+ * "New Pages Experience Is Not Supported", on a connection where get_me works.
+ * See #28. Do not add them back without a live call proving otherwise.
  */
-
-const POST_FIELDS = 'id,message,story,permalink_url,created_time,status_type'
 
 export const facebookManifest: ProviderManifest = {
   id: 'facebook',
   prefix: 'facebook',
-  maturity: 'experimental',
+  maturity: 'beta',
   baseUrl: 'https://graph.facebook.com',
-  scopes: ['public_profile', 'user_link', 'user_posts', 'user_likes'],
+  scopes: ['public_profile', 'user_link'],
   auth: { type: 'bearer' },
-  pagination: {
-    style: 'cursor',
-    size: 25,
-    sizeParam: 'limit',
-    param: 'after',
-    nextPath: 'paging.cursors.after',
-    // Meta leaves a cursor behind on the last page, so the cursor alone would
-    // page forever. paging.next is present only while more exists.
-    hasMorePath: 'paging.next',
-  },
   tools: [
     {
       name: 'get_me',
@@ -51,40 +45,6 @@ export const facebookManifest: ProviderManifest = {
         },
       },
       fields: ['id', 'name', 'link'],
-    },
-    {
-      name: 'list_my_posts',
-      description: 'List the posts this account published, newest first',
-      write: false,
-      request: 'GET /me/posts',
-      args: {
-        since: { type: 'string', description: 'ISO date lower bound, for example 2026-08-01' },
-        until: { type: 'string', description: 'ISO date upper bound' },
-        response_fields: {
-          type: 'string',
-          description: 'Meta fields selector',
-          default: POST_FIELDS,
-          param: 'fields',
-        },
-      },
-      items: 'data',
-      fields: ['id', 'message', 'story', 'permalink_url', 'created_time', 'status_type'],
-    },
-    {
-      name: 'list_liked_pages',
-      description: 'List the Pages this account has liked',
-      write: false,
-      request: 'GET /me/likes',
-      args: {
-        response_fields: {
-          type: 'string',
-          description: 'Meta fields selector',
-          default: 'id,name,link,category',
-          param: 'fields',
-        },
-      },
-      items: 'data',
-      fields: ['id', 'name', 'link', 'category'],
     },
   ],
 }
