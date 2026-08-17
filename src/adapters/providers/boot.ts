@@ -1,6 +1,7 @@
 import { createRegistry, type ProviderAdapter, type Registry } from './registry.ts'
 import { fakeProvider } from './fake.ts'
 import { discordProvider } from './discord.ts'
+import { facebookProvider } from './facebook.ts'
 import { githubProvider } from './github.ts'
 import { gcalendarProvider } from './gcalendar.ts'
 import { gdriveProvider } from './gdrive.ts'
@@ -34,6 +35,7 @@ export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
     ['GOOGLE_CLIENT_ID', gdriveProvider],
     ['NOTION_CLIENT_ID', notionProvider],
     ['SLACK_CLIENT_ID', slackProvider],
+    ['FACEBOOK_CLIENT_ID', facebookProvider],
     ['THREADS_CLIENT_ID', threadsProvider],
     ['TWITTER_CLIENT_ID', xProvider],
   ] as const

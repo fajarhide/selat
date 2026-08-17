@@ -51,6 +51,25 @@ export const GRANT_ENDPOINTS: Record<string, GrantEndpoints> = {
     // and falls back to the body form on its own.
     tokenAuth: 'basic',
   },
+  // Unversioned on purpose, the same reason the manifest is: Meta applies the
+  // app's own default version, and a version pinned from memory would fail
+  // every call once it is retired.
+  facebook: {
+    authorizeUrl: 'https://www.facebook.com/dialog/oauth',
+    tokenUrl: 'https://graph.facebook.com/oauth/access_token',
+    scopeSeparator: ',',
+    // The code exchange yields a short lived token. Traded here for a sixty day
+    // one, which is the only form worth storing.
+    longLived: {
+      url: 'https://graph.facebook.com/oauth/access_token',
+      tokenParam: 'fb_exchange_token',
+      params: { grant_type: 'fb_exchange_token' },
+      withClientSecret: true,
+    },
+    // No longLivedRefresh on purpose. Facebook has no th_refresh_token
+    // equivalent for a user token, so a grant dies at sixty days and
+    // reconnecting is the only path.
+  },
   // The authorize host is threads.net while the token host is graph.threads.net,
   // which is Meta's split and not a typo.
   threads: {
