@@ -11,6 +11,7 @@ export const testConfig: Config = {
   databaseUrl: 'postgres://unused',
   vaultKey: Buffer.alloc(32, 7),
   publicUrl: 'http://localhost:8080',
+  poolMax: 10,
 }
 
 const open: Server[] = []

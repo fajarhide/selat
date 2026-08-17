@@ -4,8 +4,10 @@ import pg from 'pg'
 
 export type Pool = pg.Pool
 
-export function createPool(databaseUrl: string): Pool {
-  return new pg.Pool({ connectionString: databaseUrl, max: 10 })
+// The default suits a server that owns its database. A small host, or a pooler
+// in front doing the sharing, wants fewer, and neither is worth a rebuild.
+export function createPool(databaseUrl: string, max = 10): Pool {
+  return new pg.Pool({ connectionString: databaseUrl, max })
 }
 
 // ponytail: numbered SQL files applied in order, tracked in one table. Swap for

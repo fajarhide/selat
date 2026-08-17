@@ -11,6 +11,7 @@ const config: Config = {
   databaseUrl: 'postgres://unused',
   vaultKey: Buffer.alloc(32, 1),
   publicUrl: 'http://localhost:8080',
+  poolMax: 10,
 }
 
 let running: Server | undefined

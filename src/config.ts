@@ -7,6 +7,7 @@ const schema = z.object({
   PUBLIC_URL: z.string().url(),
   SERVICE_TOKEN: z.string().startsWith('slt_svc_').min(40).optional(),
   DASHBOARD_URL: z.string().url().optional(),
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 })
 
 export type Config = {
@@ -16,6 +17,7 @@ export type Config = {
   publicUrl: string
   serviceToken?: string
   dashboardUrl?: string
+  poolMax: number
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -33,5 +35,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicUrl: parsed.PUBLIC_URL.replace(/\/$/, ''),
     serviceToken: parsed.SERVICE_TOKEN,
     dashboardUrl: parsed.DASHBOARD_URL?.replace(/\/$/, ''),
+    poolMax: parsed.DATABASE_POOL_MAX,
   }
 }
