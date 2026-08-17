@@ -3,6 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+Screenshot*.png
 
 # Design notes and delivery plans stay local. Some carry pricing, go to market
 # and cloud internals, and the rest are drafts that should be read before they
