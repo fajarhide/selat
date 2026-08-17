@@ -1,8 +1,10 @@
+<img src="assets/logo.svg" alt="" width="72" align="right">
+
 # Selat
 
 **One credential for every tool your agent calls.**
 
-You are building an agent. It needs GitHub, then Gmail, then Linkedin. Each one wants
+You are building an agent. It needs GitHub, then Gmail, then Discord. Each one wants
 its own OAuth dance, its own token refresh, its own schema, its own error shape.
 So you write a vault, a refresher, and a retry loop, and you write them again for
 the next agent.
@@ -12,7 +14,12 @@ once. Your agent holds one bearer token and calls `github__list_issues`. When yo
 connect or disconnect an upstream, that token does not change.
 
 Selat is Indonesian for strait, the narrow passage every ship has to pass
-through.
+through. The mark is that: two coasts, and one thing in the water between them.
+
+Run it yourself from here, or use the hosted one at
+[selat.weekndlabs.com](https://selat.weekndlabs.com), whose docs are at
+[/docs](https://selat.weekndlabs.com/docs). The gateway and every adapter are
+Apache-2.0 either way.
 
 ## 60 seconds to a real tool call
 
@@ -138,18 +145,31 @@ agent that silently reasons over half a page is worse than one that errors.
 
 ## What is actually shipped
 
-| Provider | Maturity | Notes |
+| Provider | Maturity | Tools |
 |---|---|---|
-| `fake` | experimental | No vendor needed. For smoke tests and local development |
-| `github` | beta | List, get and create issues, plus repository search. Bring your own OAuth application |
+| `github` | beta | Repository search, issues list, get and create, authenticated user |
+| `gmail` | beta | Profile, message list and get, label |
+| `gcal` | beta | Calendars, event list and get |
+| `gdrive` | beta | About, file list and get |
+| `discord` | beta | Bot user, guilds, channels, message list and post |
+| `facebook` | beta | Authenticated user |
+| `x` | experimental | User, post list and get, recent search, create post |
+| `threads` | experimental | Profile, post list and get, replies |
+| `notion` | experimental | Search, page, users |
+| `slack` | experimental | Channels, users, post message |
+| `fake` | experimental | Echoes its argument. Needs no vendor, for smoke tests |
 
-Two providers, honestly labelled. Maturity rides on every tool in the catalog,
-so an agent can refuse to call anything below `ga` if you want it to. Jira,
-Google, Notion, Slack and Linear are next, each one landing only when the
-conformance suite is green.
+Maturity rides on every tool in the catalog, so an agent can refuse to call
+anything below `ga` if you want it to. Nothing is `ga` yet, and saying so is
+cheaper than finding out later.
 
-If you want one sooner, the adapter contract is small and the suite tells you
-when you are done. See [Writing a provider](#writing-a-provider).
+A provider whose client id is blank is left out of the registry entirely, so a
+deployment serves what it has credentials for and nothing else. `gmail`, `gcal`
+and `gdrive` share one Google grant, so one consent screen covers all three.
+
+If you want a provider that is not here, the adapter contract is small and the
+conformance suite tells you when you are done. See
+[Writing a provider](#writing-a-provider).
 
 ## Connecting GitHub
 
