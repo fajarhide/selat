@@ -24,15 +24,24 @@ function resolver(overrides: Partial<GrantDeps> = {}, initial?: Partial<StoredGr
     ...initial,
   }
   const calls = { save: 0, markReauth: 0 }
+  // Stands in for the advisory lock: runs one holder at a time, so a racing
+  // caller reaches the re-read the same way it would across two processes.
+  let chain: Promise<unknown> = Promise.resolve()
   const deps: GrantDeps = {
     grants: {
       async load() { return grant },
       async save(_workspaceId, _grantId, tokens) {
         calls.save += 1
         grant.accessToken = tokens.accessToken
+        grant.expiresAt = tokens.expiresAt
       },
       async markReauth() { calls.markReauth += 1 },
       async drop() {},
+      async withRefreshLock(_workspaceId, _grantId, fn) {
+        const run = chain.then(fn, fn)
+        chain = run.catch(() => {})
+        return run
+      },
     },
     oauthConfig: () => cfg,
     refresh: async () => refreshed,
@@ -50,6 +59,7 @@ describe('grant resolution', () => {
         async save() {},
         async markReauth() {},
         async drop() {},
+        async withRefreshLock(_workspaceId, _grantId, fn) { return fn() },
       },
     })
     expect(await r.accessTokenFor('ws-1', 'g')).toBeNull()
@@ -80,8 +90,14 @@ describe('grant resolution', () => {
   it('refreshes only once when two calls race', async () => {
     const refresh = vi.fn(async () => refreshed)
     const { resolver: r } = resolver({ refresh })
-    await Promise.all([r.accessTokenFor('ws-1', 'g'), r.accessTokenFor('ws-1', 'g')])
+    const [a, b] = await Promise.all([
+      r.accessTokenFor('ws-1', 'g'),
+      r.accessTokenFor('ws-1', 'g'),
+    ])
+    // The loser of the lock must re-read rather than refresh again. A vendor
+    // that rotates refresh tokens revokes the whole grant on the second call.
     expect(refresh).toHaveBeenCalledTimes(1)
+    expect([a, b]).toEqual(['new', 'new'])
   })
 
   it('raises reauth_required with a deep link when the refresh is rejected', async () => {

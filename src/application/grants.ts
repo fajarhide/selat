@@ -16,6 +16,8 @@ export interface GrantStore {
   save(workspaceId: string, grantId: string, tokens: TokenSet): Promise<void>
   markReauth(workspaceId: string, grantId: string): Promise<void>
   drop(workspaceId: string, grantId: string): Promise<void>
+  /** Holds every refresher of one grant to a single turn, across processes. */
+  withRefreshLock<T>(workspaceId: string, grantId: string, fn: () => Promise<T>): Promise<T>
 }
 
 export type GrantDeps = {
@@ -26,11 +28,10 @@ export type GrantDeps = {
   reauthUrl?(grantId: string): string
 }
 
-export function createGrantResolver(deps: GrantDeps) {
-  // Providers that rotate refresh tokens revoke the whole grant if two
-  // refreshes race, so refreshes are single-flighted per workspace and grant.
-  const inflight = new Map<string, Promise<string>>()
+const isFresh = (grant: StoredGrant): boolean =>
+  !grant.expiresAt || grant.expiresAt.getTime() - Date.now() > SKEW_MS
 
+export function createGrantResolver(deps: GrantDeps) {
   const reauth = (grantId: string, message: string) =>
     new GatewayError('reauth_required', message, {
       provider: grantId,
@@ -43,20 +44,29 @@ export function createGrantResolver(deps: GrantDeps) {
       if (!grant) return null
       if (grant.reauthNeeded) throw reauth(grantId, `${grantId} needs to be reconnected`)
 
-      const stillFresh = !grant.expiresAt || grant.expiresAt.getTime() - Date.now() > SKEW_MS
-      if (stillFresh) return grant.accessToken
+      if (isFresh(grant)) return grant.accessToken
 
-      const refreshToken = grant.refreshToken
-      if (!refreshToken) {
+      if (!grant.refreshToken) {
         await deps.grants.markReauth(workspaceId, grantId)
         throw reauth(grantId, `${grantId} expired and has no refresh token`)
       }
 
-      const key = `${workspaceId}:${grantId}`
-      const existing = inflight.get(key)
-      if (existing) return existing
+      // Providers that rotate refresh tokens revoke the whole grant if two
+      // refreshes race, and the racer is as likely to be another replica as
+      // another request, so the lock has to outlive this process.
+      return deps.grants.withRefreshLock(workspaceId, grantId, async () => {
+        // Re-read inside the lock. Whoever held it before may already have
+        // done the work, and spending the rotated token again is the revoke.
+        const current = (await deps.grants.load(workspaceId, grantId)) ?? grant
+        if (current.reauthNeeded) throw reauth(grantId, `${grantId} needs to be reconnected`)
+        if (isFresh(current)) return current.accessToken
 
-      const promise = (async () => {
+        const refreshToken = current.refreshToken
+        if (!refreshToken) {
+          await deps.grants.markReauth(workspaceId, grantId)
+          throw reauth(grantId, `${grantId} expired and has no refresh token`)
+        }
+
         try {
           const tokens = await deps.refresh(deps.oauthConfig(grantId), refreshToken)
           await deps.grants.save(workspaceId, grantId, tokens)
@@ -64,12 +74,8 @@ export function createGrantResolver(deps: GrantDeps) {
         } catch {
           await deps.grants.markReauth(workspaceId, grantId)
           throw reauth(grantId, `${grantId} refresh was rejected`)
-        } finally {
-          inflight.delete(key)
         }
-      })()
-      inflight.set(key, promise)
-      return promise
+      })
     },
   }
 }
