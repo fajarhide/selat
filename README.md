@@ -253,6 +253,22 @@ Gateway credentials are stored as SHA-256 hashes and shown once. The `slt_live_`
 prefix is fixed so the pattern can be registered with GitHub secret scanning,
 which turns a leaked token into an automatic revocation instead of an incident.
 
+**A credential can be narrower than the workspace it belongs to**, which is how
+you give an agent less than everything you have connected:
+
+```sh
+curl -s -X POST $SELAT_URL/v1/admin/workspaces/$WORKSPACE/credentials \
+  -H "Authorization: Bearer $SELAT_SERVICE_TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"drive reader","scope":{"providers":["gdrive"],"readOnly":true}}'
+```
+
+`providers` restricts which prefixes it can reach, `null` meaning all of them.
+`readOnly` refuses every tool the manifest marks as a write. Both apply to the
+tool list as well as to the call, so an agent holding this one is offered six
+Drive tools and never learns that GitHub is connected at all. A tool it can see
+is a tool it can call, which is the property that keeps a model from spending a
+turn discovering otherwise.
+
 No token, upstream or gateway, is ever written to a log or returned in a
 response body. Every query against a tenant table carries a workspace predicate,
 and a test walks the source to fail the build if one does not. The single

@@ -21,7 +21,7 @@ import { listWorkspaceTools, TOOL_BUDGET } from './application/catalog.ts'
 import { searchTools } from './application/tool-search.ts'
 import { searchToolCatalogEntry } from './application/meta-tools.ts'
 import { createGrantResolver } from './application/grants.ts'
-import { scopeAllowsProvider } from './domain/credential.ts'
+import { scopeAllowsProvider, scopeAllowsTool } from './domain/credential.ts'
 import type { CallDeps } from './application/call-tool.ts'
 import type { ConnectionDeps } from './application/connections.ts'
 import type { Registry } from './adapters/providers/registry.ts'
@@ -158,7 +158,7 @@ export function createServer(deps: ServerDeps): express.Express {
       // The credential scope narrows what this bearer may see, on top of what
       // the workspace has connected. Capped after that filter, so the count
       // reported is the one this bearer can actually reach.
-      const visible = tools.filter((tool) => scopeAllowsProvider(req.gateway.scope, tool.provider))
+      const visible = tools.filter((tool) => scopeAllowsTool(req.gateway.scope, tool))
       // A search asks a question about the whole catalog, so the budget that
       // exists to keep a model's tool list short does not apply to it.
       const listed = query ? searchTools(visible, query, SEARCH_RESULT_LIMIT) : visible.slice(0, TOOL_BUDGET)

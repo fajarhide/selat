@@ -32,7 +32,7 @@ export function assertScopeAllows(
   prefix: string,
   isWrite: boolean,
 ): void {
-  if (scope.providers !== null && !scope.providers.includes(prefix)) {
+  if (!scopeAllowsProvider(scope, prefix)) {
     throw new GatewayError('credential_scope_denied', `credential is not scoped to ${prefix}`, {
       provider: prefix,
     })
@@ -46,4 +46,18 @@ export function assertScopeAllows(
 
 export function scopeAllowsProvider(scope: CredentialScope, prefix: string): boolean {
   return scope.providers === null || scope.providers.includes(prefix)
+}
+
+/**
+ * The listing half of `assertScopeAllows`, and the two have to agree: a tool
+ * belongs in a credential's list exactly when that credential could call it.
+ * Offering one it cannot spends the model's turn to teach it a 403 that was
+ * knowable before the list was written.
+ */
+export function scopeAllowsTool(
+  scope: CredentialScope,
+  tool: { provider: string; write: boolean },
+): boolean {
+  if (!scopeAllowsProvider(scope, tool.provider)) return false
+  return !(scope.readOnly && tool.write)
 }
