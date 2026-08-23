@@ -178,7 +178,7 @@ describe('manifest executor: requests', () => {
     })
   })
 
-  it('refuses a binary response too large to carry, rather than base64ing it', async () => {
+  it('refuses a binary response too large to hold, on the declared length', async () => {
     const files = withTools([
       {
         name: 'download_thing',
@@ -189,8 +189,16 @@ describe('manifest executor: requests', () => {
         args: { id: { type: 'string', required: true } },
       },
     ])
+    // Refused on content-length, before the body is pulled, which is the point:
+    // the ceiling exists so one response cannot be held whole in memory. Past
+    // the inline limit the application stores it and answers with an id, so
+    // this is no longer about what a context window can take.
     const upstream = fakeUpstream([
-      { match: /things/, raw: 'x'.repeat(6 * 1024 * 1024), headers: { 'content-type': 'application/pdf' } },
+      {
+        match: /things/,
+        raw: 'small',
+        headers: { 'content-type': 'application/pdf', 'content-length': String(26 * 1024 * 1024) },
+      },
     ])
     await expect(files.callTool(ctx(upstream), 'download_thing', { id: 't1' })).rejects.toMatchObject(
       { code: 'invalid_arguments' },

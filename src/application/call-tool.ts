@@ -2,7 +2,7 @@ import { assertScopeAllows, type CredentialScope } from '../domain/credential.ts
 import { GatewayError } from '../domain/errors.ts'
 import { parseToolName } from '../domain/tool-names.ts'
 import type { Registry, ToolResult } from '../adapters/providers/registry.ts'
-import type { EnablementStore } from '../ports/stores.ts'
+import type { EnablementStore, FileStore } from '../ports/stores.ts'
 
 export interface GrantResolver {
   accessTokenFor(workspaceId: string, grantId: string): Promise<string | null>
@@ -18,6 +18,9 @@ export type CallDeps = {
   enablement: EnablementStore
   grants: GrantResolver
   idempotency: IdempotencyStore
+  /** Absent leaves every binary result inline, which is what the tests and the
+   *  conformance suite want. A server passes one. */
+  files?: FileStore
   /** Per-call budget. The upstream is abandoned past this, with upstream_timeout. */
   timeoutMs?: number
 }
@@ -92,10 +95,53 @@ export async function callTool(deps: CallDeps, input: CallInput): Promise<ToolRe
     throw adapter.mapError(err)
   }
 
+  result = await handOffLargeBytes(deps, input.workspaceId, result)
+
   if (replayable) {
     await deps.idempotency.put(input.workspaceId, input.idempotencyKey!, result)
   }
   return result
+}
+
+/** Base64 costs four bytes for every three and a model pays for every one of
+ *  them, so anything past this is stored and answered as a reference instead.
+ *  Below it, inline is still the better answer: a small text file is most
+ *  useful read rather than fetched. */
+const INLINE_LIMIT = 256 * 1024
+
+type BinaryContent = { mime_type: string; size: number; data: string }
+
+/**
+ * The executor has no store and should not: it turns a response into a result
+ * and nothing else. Whether those bytes are small enough to hand to a model is
+ * a question about this deployment, so it is answered here.
+ */
+async function handOffLargeBytes(
+  deps: CallDeps,
+  workspaceId: string,
+  result: ToolResult,
+): Promise<ToolResult> {
+  if (!result.binary || !deps.files) return result
+  const content = result.content as BinaryContent
+  if (content.size <= INLINE_LIMIT) return result
+
+  const id = await deps.files.put(
+    workspaceId,
+    content.mime_type,
+    Buffer.from(content.data, 'base64'),
+  )
+  // No longer binary: what comes back is metadata, and a surface that would
+  // have emitted an image block should emit this as the JSON it is.
+  return {
+    ...result,
+    binary: false,
+    content: {
+      file_id: id,
+      mime_type: content.mime_type,
+      size: content.size,
+      note: 'Too large to inline. Fetch it at GET /v1/files/{file_id}, or hand the id to a tool that takes one. Available for 24 hours.',
+    },
+  }
 }
 
 async function withTimeout<T>(work: Promise<T>, ms: number, provider: string): Promise<T> {

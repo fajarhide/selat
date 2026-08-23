@@ -132,10 +132,11 @@ export type ProviderManifest = {
 }
 
 const PLACEHOLDER = /\{(\w+)\}/g
-/** Base64 costs four bytes for every three, and an MCP client puts the block
- *  straight into a context window, so this caps the reply rather than the file.
+/** A refusal, not a budget. Anything past the inline limit is stored and
+ *  answered as a reference by the application layer, so this only has to stop a
+ *  single response from being held whole in memory.
  *  ponytail: one number for every provider, split per tool if one earns it. */
-const MAX_BINARY_BYTES = 5 * 1024 * 1024
+const MAX_BINARY_BYTES = 25 * 1024 * 1024
 const CURSOR_DESCRIPTION = 'Opaque cursor from a previous page'
 const DEFAULT_RETRY_AFTER = 60
 

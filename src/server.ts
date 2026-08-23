@@ -11,6 +11,8 @@ import { refreshGrant } from './adapters/oauth/client.ts'
 import { errorHandler, withRequestContext } from './interface/http/context.ts'
 import { requireCredential } from './interface/http/auth.ts'
 import { restRoutes } from './interface/http/rest.ts'
+import { fileStore } from './adapters/db/file-store.ts'
+import { GatewayError } from './domain/errors.ts'
 import { mcpRoutes } from './interface/http/mcp.ts'
 import { connectionRoutes } from './interface/http/connections.ts'
 import { adminRoutes } from './interface/http/admin.ts'
@@ -53,11 +55,14 @@ export function createServer(deps: ServerDeps): express.Express {
     reauthUrl: (grantId) => `${deps.config.publicUrl}/v1/connections/${grantId}/authorize`,
   })
 
+  const files = fileStore(deps.pool)
+
   const callDeps: CallDeps = {
     registry: deps.registry,
     enablement,
     grants: grantResolver,
     idempotency: idempotencyStore(deps.pool),
+    files: files,
   }
 
   const connectionDeps: ConnectionDeps = {
@@ -163,6 +168,27 @@ export function createServer(deps: ServerDeps): express.Express {
   app.use(authenticated, rateLimiter(deps.callsPerMinute ?? 600))
   app.use(mcpRoutes(callDeps, deps.pool))
   app.use(restRoutes(callDeps, deps.pool))
+
+  // Bytes a tool produced and could not hand to a model. Same credential as
+  // the call that made them, and scoped to its workspace, so a file id from
+  // another tenant is a 404 rather than a leak.
+  app.get('/v1/files/:id', async (req, res, next) => {
+    try {
+      const id = String(req.params.id ?? '')
+      const found = /^[0-9a-f-]{36}$/.test(id)
+        ? await files.get(req.gateway.workspaceId, id)
+        : null
+      if (!found) {
+        throw new GatewayError('tool_not_found', 'no such file, or it expired')
+      }
+      res.setHeader('content-type', found.mimeType)
+      res.setHeader('content-length', String(found.size))
+      res.setHeader('x-request-id', req.requestId)
+      res.send(found.bytes)
+    } catch (err) {
+      next(err)
+    }
+  })
 
   app.use(errorHandler())
   return app

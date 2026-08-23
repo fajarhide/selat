@@ -169,7 +169,7 @@ agent that silently reasons over half a page is worse than one that errors.
 | `github` | beta | Repository search, issues list, get and create, pull requests list and get, review comments, reviews, check runs, authenticated user |
 | `gmail` | beta | Profile, message list and get, label |
 | `gcal` | beta | Calendars, event list and get |
-| `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete |
+| `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete. A download past 256 KB comes back as a file id rather than base64 |
 | `discord` | beta | Bot user, guilds, channels, message list and post |
 | `facebook` | beta | Authenticated user |
 | `x` | experimental | User, post list and get, recent search, create post |
