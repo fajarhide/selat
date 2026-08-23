@@ -21,7 +21,32 @@ Run it yourself from here, or use the hosted one at
 [/docs](https://selat.weekndlabs.com/docs). The gateway and every adapter are
 Apache-2.0 either way.
 
-## 60 seconds to a real tool call
+## One command to a real tool call
+
+```sh
+npx selat
+```
+
+No database, no config file, no Docker. With no `DATABASE_URL` set, Selat runs
+Postgres in-process (PGlite, the real thing compiled to WASM) and keeps its
+state in `~/.selat`. The same SQL, the same migrations, and nothing to install.
+
+```
+{"msg":"listening","port":8080,"database":"embedded","dataDir":"~/.selat/db"}
+
+No DATABASE_URL, so this is a local instance with its own embedded Postgres.
+State lives in ~/.selat, and this credential is in ~/.selat/credential:
+
+  slt_live_gdOhIUCc1cBeZP5…
+```
+
+The first run creates a workspace, mints that credential, and enables `fake`,
+which needs no vendor application, so the next command is already a real tool
+call. Restarting reuses the same state and prints the same credential.
+
+Set `DATABASE_URL` and none of that happens: the embedded database, the
+generated vault key and the local credential are local mode only, and a
+deployment states its own values. That path is unchanged:
 
 ```sh
 git clone https://github.com/fajarhide/selat && cd selat
@@ -31,16 +56,7 @@ docker compose up -d
 npm run quickstart
 ```
 
-```
-Workspace 3c0862e2-d0eb-4ca3-87e9-fcb80b683b44 created.
-Registered providers: fake
-
-Your gateway credential, shown once:
-
-  slt_live_gdOhIUCc1cBeZP5…
-```
-
-That credential is shown once and stored as a hash, so keep it now:
+A credential is shown once and stored as a hash, so keep it now:
 
 ```sh
 export SELAT_TOKEN=slt_live_gdOhIUCc1cBeZP5…
