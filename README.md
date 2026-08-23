@@ -1,27 +1,104 @@
-<img src="assets/logo.svg" alt="" width="72" align="right">
+<div align="center">
+  <img src="assets/logo.svg" alt="" width="132" />
 
-# Selat
+<h1>Selat</h1>
+<p align="center">
+    <em><b>One gateway, every tool, any agent.</b> Connect each upstream once and your agents call the same catalog over MCP or plain HTTP. Selat holds the OAuth, refreshes the tokens, and <b>never changes the bearer your agent already has</b>.</em>
+</p>
 
-**One gateway, every tool, any agent.**
+[![CI](https://github.com/fajarhide/selat/actions/workflows/ci.yml/badge.svg)](https://github.com/fajarhide/selat/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/@fajarhide/selat?logo=npm&logoColor=white)](https://www.npmjs.com/package/@fajarhide/selat) [![MCP](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io/) [![TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6.svg)](https://www.typescriptlang.org/) [![License: Apache 2.0](https://img.shields.io/github/license/fajarhide/selat)](https://github.com/fajarhide/selat/blob/main/LICENSE)
+</br></br>
 
-You are building an agent. It needs GitHub, then Gmail, then Discord. Each one wants
-its own OAuth dance, its own token refresh, its own schema, its own error shape.
-So you write a vault, a refresher, and a retry loop, and you write them again for
-the next agent.
+```bash
+npx @fajarhide/selat
+```
 
-Selat is the gateway that holds all of it. Your workspace connects each upstream
-once. Your agent holds one bearer token and calls `github__list_issues`. When you
-connect or disconnect an upstream, that token does not change.
+<sub>No database. No config file. No Docker. No vendor account to get the first tool call.</sub>
+</div>
 
-Selat is Indonesian for strait, the narrow passage every ship has to pass
-through. The mark is that: two coasts, and one thing in the water between them.
+---
 
-Run it yourself from here, or use the hosted one at
-[selat.weekndlabs.com](https://selat.weekndlabs.com), whose docs are at
-[/docs](https://selat.weekndlabs.com/docs). The gateway and every adapter are
-Apache-2.0 either way.
+## What it does
 
-## One command to a real tool call
+**Holds the OAuth so your agent never sees it.** Connect GitHub, Gmail, Drive or
+Discord once, from a browser. Selat seals the tokens, refreshes them when they
+expire, and your agent only ever sends its own bearer.
+
+**That bearer does not rotate under you.** Connecting or disconnecting an upstream
+changes nothing your agent holds. Humans manage connections, agents hold one
+token, and the two never have to be redeployed together.
+
+**MCP and REST are equals.** Claude Desktop and the LangGraph runtime you wrote
+yourself see the same catalog, backed by the same vault, metered on the same
+counter. Neither surface is a wrapper over the other.
+
+**A failure comes back as a code, not a stack trace.** Eleven codes, a closed set,
+and nothing else is ever returned. `reauth_required` carries the URL a human has
+to click. `rate_limited` carries `retry_after`. Every response carries a
+`request_id` that also appears in the log line for that call.
+
+**Runs on your hardware, or on ours.** One command locally with an embedded
+Postgres, a podman quadlet on a VPS, or the hosted instance at
+[selat.weekndlabs.com](https://selat.weekndlabs.com). Apache-2.0 either way, and
+that includes every provider adapter.
+
+---
+
+## The code you stop writing
+
+<table>
+<tr>
+<td align="center"><b>Without Selat</b><br/><sub>per agent, and again per vendor</sub></td>
+<td align="center"><b>With Selat</b><br/><sub>one bearer, one endpoint</sub></td>
+</tr>
+<tr>
+<td valign="top">
+
+<pre><code>// a vault
+await store.put(userId, 'github', encrypt(tok))
+
+// a refresher, on a timer, forever
+if (tok.expires_at &lt; now()) {
+  tok = await gh.refresh(tok.refresh_token)
+  await store.put(userId, 'github', encrypt(tok))
+}
+
+// a client, a schema, an error shape
+const gh = new Octokit({ auth: decrypt(tok) })
+
+// then all of it again for Gmail,
+// Drive, Discord, Notion, Slack
+</code></pre>
+
+</td>
+<td valign="top">
+
+<pre><code>const res = await fetch(
+  `${SELAT}/v1/tools/github__list_issues/call`,
+  {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${SELAT_TOKEN}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      owner: 'vercel', repo: 'next.js',
+    }),
+  },
+)
+</code></pre>
+
+</td>
+</tr>
+</table>
+
+You can absolutely write the left column, and for one agent against one service
+you probably should. Selat starts paying for itself at the third upstream, or
+the second agent, or the first time a refresh token rotates at 3am.
+
+---
+
+## From nothing to a real tool call
 
 ```sh
 npx @fajarhide/selat
@@ -124,6 +201,8 @@ Point an MCP client at the same workspace and the same tools appear:
 MCP and REST are equals here. Claude Desktop and your LangGraph runtime see the
 same catalog, backed by the same vault, metered on the same counter.
 
+---
+
 ## Errors your agent can branch on
 
 Most gateways hand your model a 500 and a stack trace. Selat answers with a
@@ -162,6 +241,8 @@ List-shaped tools always answer with `hasMore` and `nextCursor`:
 A truncated list with no signal is treated as a defect here, not a tradeoff. An
 agent that silently reasons over half a page is worse than one that errors.
 
+---
+
 ## What is actually shipped
 
 | Provider | Maturity | Tools |
@@ -195,6 +276,8 @@ conformance suite tells you when you are done. See
 covers the two rules that are not guessable from the code, and
 [CHANGELOG.md](CHANGELOG.md) is what changed and when.
 
+---
+
 ## Connecting GitHub
 
 Every provider needs an OAuth application. Self-hosting means bringing your own,
@@ -224,11 +307,9 @@ Your agent's credential is untouched by any of this. That separation is the
 whole design: humans manage connections, agents hold one bearer, and the two
 never have to be redeployed together.
 
-## Why not just call the APIs directly
+---
 
-You can, and for one agent against one service you probably should. Selat starts
-paying for itself at the third upstream, or the second agent, or the first time
-a refresh token rotates at 3am.
+## Questions people actually ask
 
 **Why not a per-vendor MCP server?** You end up running one process per service,
 each with its own auth story, and your agent sees an unbounded tool list. Selat
@@ -243,6 +324,8 @@ applications.
 limit, so the exposed catalog is capped at 60 tools per workspace and every tool
 can be toggled individually. When the cap bites, `catalog_truncated` says so
 instead of quietly shortening the list.
+
+---
 
 ## Security
 
@@ -280,6 +363,8 @@ a quietly loosened rule.
 Report a vulnerability privately through GitHub security advisories rather than
 a public issue.
 
+---
+
 ## API
 
 | Surface | What it does |
@@ -293,6 +378,8 @@ a public issue.
 | `GET /v1/whoami` | Workspace, plan, connected providers. No secrets |
 | `GET /v1/health`, `GET /v1/ready` | Liveness and readiness |
 | `GET /v1/catalog` | What this deployment booted, with tool names. No credential, no workspace |
+
+---
 
 ## Deploying it yourself
 
@@ -367,6 +454,8 @@ Podman writes an OCI spec that older crun rejects, and the build then dies at
 and is not. If podman came from a newer release than the rest of the system,
 upgrade crun from the same place.
 
+---
+
 ## Writing a provider
 
 Implement `ProviderAdapter` in `src/adapters/providers/`, then run the
@@ -387,6 +476,8 @@ describe('my provider conformance', () => {
 A contribution merges when that suite is green. No adapter has ever needed a
 network connection to be tested, and yours should not either.
 
+---
+
 ## Development
 
 ```sh
@@ -400,8 +491,22 @@ npm run dev
 Tests run against a real Postgres. `TEST_DATABASE_URL` defaults to the database
 docker compose creates.
 
+---
+
 ## License
 
 Apache-2.0. The gateway and every provider adapter are open, and always will be.
 Billing, organisations, SSO and the hosted OAuth applications live in a separate
 private repository, which reaches this one over HTTP like any other client.
+
+---
+
+<p align="center">
+  <a href="https://selat.weekndlabs.com">Hosted</a> ·
+  <a href="https://selat.weekndlabs.com/docs">Docs</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+<p align="center">Built with care by <a href="https://github.com/fajarhide">Fajar Hidayat</a></p>
