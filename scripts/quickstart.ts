@@ -1,5 +1,4 @@
-import { loadConfig } from '../src/config.ts'
-import { createPool, runMigrations } from '../src/adapters/db/pool.ts'
+import { openDatabase } from '../src/open-database.ts'
 import { mintCredential } from '../src/domain/credential.ts'
 import { bootRegistry } from '../src/adapters/providers/boot.ts'
 
@@ -8,9 +7,7 @@ import { bootRegistry } from '../src/adapters/providers/boot.ts'
  * no vendor. It exists so the README's step two is a command rather than a
  * paragraph, which is what makes time to first tool call measurable.
  */
-const config = loadConfig()
-const pool = createPool(config.databaseUrl)
-await runMigrations(pool)
+const { pool, config } = await openDatabase()
 
 const name = process.argv[2] ?? 'my workspace'
 const { rows } = await pool.query('INSERT INTO workspaces (name) VALUES ($1) RETURNING id', [name])

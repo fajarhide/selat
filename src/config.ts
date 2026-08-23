@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 const schema = z.object({
   PORT: z.coerce.number().default(8080),
-  DATABASE_URL: z.string().min(1),
+  // Absent means local mode: an embedded Postgres under the data directory.
+  // A deployment sets it, and setting it takes that path out of the picture.
+  DATABASE_URL: z.string().min(1).optional(),
   VAULT_KEY: z.string().regex(/^[0-9a-f]{64}$/, 'VAULT_KEY must be 32 bytes of hex'),
   PUBLIC_URL: z.string().url(),
   SERVICE_TOKEN: z.string().startsWith('slt_svc_').min(40).optional(),
@@ -12,7 +14,7 @@ const schema = z.object({
 
 export type Config = {
   port: number
-  databaseUrl: string
+  databaseUrl?: string
   vaultKey: Buffer
   publicUrl: string
   serviceToken?: string
@@ -30,7 +32,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     port: parsed.PORT,
-    databaseUrl: parsed.DATABASE_URL,
+    ...(parsed.DATABASE_URL ? { databaseUrl: parsed.DATABASE_URL } : {}),
     vaultKey,
     publicUrl: parsed.PUBLIC_URL.replace(/\/$/, ''),
     serviceToken: parsed.SERVICE_TOKEN,

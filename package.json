@@ -16,6 +16,7 @@
     "quickstart": "node --env-file-if-exists=.env --experimental-strip-types scripts/quickstart.ts"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.6",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "express": "^5.0.0",
     "pg": "^8.13.0",
@@ -27,5 +28,14 @@
     "@types/pg": "^8.11.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
-  }
+  },
+  "bin": {
+    "selat": "dist/src/main.js"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "README.md",
+    "LICENSE"
+  ]
 }
