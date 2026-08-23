@@ -174,15 +174,21 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
       const request = buildRequest(manifest, tool, args, paging, cursor)
 
       const secret = ctx.accessToken ?? ''
-      const res = await ctx.fetch(withKeyInQuery(request.url, manifest.auth, secret), {
-        ...request.init,
-        headers: {
-          ...manifest.headers,
-          ...authHeader(manifest.auth, secret),
-          'x-request-id': ctx.requestId,
-          ...(request.contentType ? { 'content-type': request.contentType } : {}),
+      const res = await followRedirects(
+        ctx.fetch,
+        fail,
+        manifest.auth,
+        withKeyInQuery(request.url, manifest.auth, secret),
+        {
+          ...request.init,
+          headers: {
+            ...manifest.headers,
+            ...authHeader(manifest.auth, secret),
+            'x-request-id': ctx.requestId,
+            ...(request.contentType ? { 'content-type': request.contentType } : {}),
+          },
         },
-      })
+      )
 
       return readResponse(manifest, tool, paging, cursor, res, fail, chose)
     },
@@ -195,6 +201,64 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
 }
 
 type Fail = (code: ErrorCode, message: string, retryAfter?: number) => GatewayError
+
+const MAX_HOPS = 5
+
+/**
+ * Redirects are followed here rather than by fetch, for one reason: a redirect
+ * to another origin must not carry our credential to it. Left to the default,
+ * the Authorization header travels to wherever the upstream points, and the
+ * only thing stopping that being a leak today is that every base URL in the
+ * registry is a constant this project chose.
+ *
+ * Cross-origin redirects are followed, not refused, because they are ordinary:
+ * a Drive download answers with one to googleusercontent.com, and that target
+ * carries its own signature and needs no header from us.
+ *
+ * Only GET and HEAD follow. Anything with a body is returned as it came, so a
+ * write is never replayed against an address the upstream picked.
+ */
+async function followRedirects(
+  doFetch: typeof fetch,
+  fail: Fail,
+  auth: AuthScheme,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  let current = url
+  let headers = { ...(init.headers as Record<string, string>) }
+
+  for (let hop = 0; hop <= MAX_HOPS; hop += 1) {
+    const res = await doFetch(current, { ...init, headers, redirect: 'manual' })
+    const location = res.headers.get('location')
+    if (!isRedirect(res.status) || !location) return res
+    if (method !== 'GET' && method !== 'HEAD') return res
+
+    const next = new URL(location, current)
+    if (new URL(current).origin !== next.origin) headers = withoutCredentials(headers, auth)
+    current = next.toString()
+  }
+  throw fail('upstream_error', `more than ${MAX_HOPS} redirects from ${new URL(url).host}`)
+}
+
+function isRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+/** Both places a secret can travel in a header: the bearer, and whatever an
+ *  api_key provider named. Matched case-insensitively, because a header name
+ *  is. */
+function withoutCredentials(
+  headers: Record<string, string>,
+  auth: AuthScheme,
+): Record<string, string> {
+  const drop = new Set(['authorization'])
+  if (auth.type === 'api_key' && auth.in === 'header') drop.add(auth.name.toLowerCase())
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !drop.has(name.toLowerCase())),
+  )
+}
 
 /** Merged over any static manifest header, so a manifest cannot make itself a
  *  way to send somebody else's credential. */
