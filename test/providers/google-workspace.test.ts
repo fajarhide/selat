@@ -116,4 +116,30 @@ describe('google drive', () => {
     expect(params.get('fields')).toBe('files(id,trashed)')
     expect(params.get('response_fields')).toBeNull()
   })
+
+  it('asks Drive for the bytes, and returns them as base64', async () => {
+    const upstream = fakeUpstream([
+      { match: /files/, raw: '%PDF-1.7', headers: { 'content-type': 'application/pdf' } },
+    ])
+    const result = await gdrive.callTool(ctx(upstream), 'download_file', { file_id: 'f1' })
+    expect(new URL(upstream.calls[0]?.url ?? '').searchParams.get('alt')).toBe('media')
+    expect(result.content).toMatchObject({
+      mime_type: 'application/pdf',
+      data: Buffer.from('%PDF-1.7').toString('base64'),
+    })
+  })
+
+  it('exports a Doc through the export endpoint, under Drive own parameter name', async () => {
+    const upstream = fakeUpstream([
+      { match: /export/, raw: 'the doc', headers: { 'content-type': 'text/plain; charset=UTF-8' } },
+    ])
+    const result = await gdrive.callTool(ctx(upstream), 'export_file', {
+      file_id: 'f1',
+      mime_type: 'text/plain',
+    })
+    const url = new URL(upstream.calls[0]?.url ?? '')
+    expect(url.pathname).toBe('/drive/v3/files/f1/export')
+    expect(url.searchParams.get('mimeType')).toBe('text/plain')
+    expect(result.content).toMatchObject({ mime_type: 'text/plain', size: 7 })
+  })
 })

@@ -155,6 +155,48 @@ describe('manifest executor: requests', () => {
     })
   })
 
+  it('hands back base64 with its media type when the tool is declared binary', async () => {
+    const files = withTools([
+      {
+        name: 'download_thing',
+        description: 'Download one thing',
+        write: false,
+        request: 'GET /things/{id}',
+        binary: true,
+        args: { id: { type: 'string', required: true } },
+      },
+    ])
+    const upstream = fakeUpstream([
+      { match: /things/, raw: 'hello bytes', headers: { 'content-type': 'application/pdf' } },
+    ])
+    const result = await files.callTool(ctx(upstream), 'download_thing', { id: 't1' })
+    expect(result.binary).toBe(true)
+    expect(result.content).toEqual({
+      mime_type: 'application/pdf',
+      size: 11,
+      data: Buffer.from('hello bytes').toString('base64'),
+    })
+  })
+
+  it('refuses a binary response too large to carry, rather than base64ing it', async () => {
+    const files = withTools([
+      {
+        name: 'download_thing',
+        description: 'Download one thing',
+        write: false,
+        request: 'GET /things/{id}',
+        binary: true,
+        args: { id: { type: 'string', required: true } },
+      },
+    ])
+    const upstream = fakeUpstream([
+      { match: /things/, raw: 'x'.repeat(6 * 1024 * 1024), headers: { 'content-type': 'application/pdf' } },
+    ])
+    await expect(files.callTool(ctx(upstream), 'download_thing', { id: 't1' })).rejects.toMatchObject(
+      { code: 'invalid_arguments' },
+    )
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.

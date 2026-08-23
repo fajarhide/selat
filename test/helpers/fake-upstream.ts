@@ -1,7 +1,10 @@
 export type Route = {
   match: RegExp
   status?: number
-  body: unknown
+  body?: unknown
+  /** Sent verbatim instead of body, for a route that answers something other
+   *  than JSON. */
+  raw?: string
   headers?: Record<string, string>
 }
 
@@ -18,7 +21,7 @@ export function fakeUpstream(routes: Route[]): FakeUpstream {
     calls.push({ url, init })
     const route = routes.find((candidate) => candidate.match.test(url))
     if (!route) return new Response(JSON.stringify({ message: 'no route' }), { status: 404 })
-    return new Response(JSON.stringify(route.body), {
+    return new Response(route.raw ?? JSON.stringify(route.body), {
       status: route.status ?? 200,
       headers: { 'content-type': 'application/json', ...(route.headers ?? {}) },
     })
