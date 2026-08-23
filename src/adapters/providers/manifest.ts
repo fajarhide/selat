@@ -63,7 +63,17 @@ export type Pagination =
    * for what came before the last id it holds. Discord pages this way, and so
    * does anything modelled on a snowflake id.
    */
-  | { style: 'id'; size: number; sizeParam: string; param: string; idPath?: string }
+  | {
+      style: 'id'
+      size: number
+      sizeParam: string
+      param: string
+      idPath?: string
+      /** Dotted path to the vendor's own answer. Without it the executor infers
+       *  from page fullness, which is wrong whenever a last page is exactly
+       *  full: the caller is told there is more and finds nothing. */
+      hasMorePath?: string
+    }
 
 export type ErrorRules = {
   /** What a bare 403 means here. Defaults to reauth_required, which is right
@@ -660,7 +670,9 @@ async function readResponse(
   if (paging.style === 'id') {
     // Read off the raw item, because projection may well have dropped the id
     // this provider pages by.
-    const hasMore = list.length === paging.size
+    const hasMore = paging.hasMorePath
+      ? Boolean(getPath(body, paging.hasMorePath))
+      : list.length === paging.size
     const last = list[list.length - 1]
     const next = hasMore ? getPath(last, paging.idPath ?? 'id') : undefined
     const token = typeof next === 'string' || typeof next === 'number' ? String(next) : null

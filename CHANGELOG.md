@@ -2,6 +2,15 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## Unreleased
+
+### Fixed
+
+- An id-paged provider can carry the vendor's own `has_more` instead of
+  inferring from page fullness, which was wrong whenever a last page happened
+  to be exactly full: the caller was told there was more and found nothing. A
+  provider that sets nothing keeps inferring exactly as before (#69).
+
 ## 0.1.1 - 2026-08-23
 
 ### Added

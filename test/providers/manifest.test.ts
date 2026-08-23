@@ -447,6 +447,59 @@ describe('manifest executor: requests', () => {
     expect(upstream.calls).toHaveLength(1)
   })
 
+  it('believes the vendor about a last page rather than inferring from fullness', async () => {
+    // Stripe pages by object id and also says has_more. Without reading it, a
+    // last page that happens to be exactly full is reported as having a next
+    // one, and the caller spends a request to find nothing.
+    const ided = withTools(
+      [
+        {
+          name: 'list_things',
+          description: 'List things',
+          write: false,
+          request: 'GET /things',
+          args: {},
+          items: 'data',
+        },
+      ],
+      { pagination: { style: 'id', size: 2, sizeParam: 'limit', param: 'starting_after', hasMorePath: 'has_more' } },
+    )
+    const exactlyFullAndDone = fakeUpstream([
+      { match: /things/, body: { has_more: false, data: [{ id: 'a' }, { id: 'b' }] } },
+    ])
+    const done = await ided.callTool(ctx(exactlyFullAndDone), 'list_things', {})
+    expect(done.hasMore).toBe(false)
+    expect(done.nextCursor).toBeNull()
+
+    const more = fakeUpstream([
+      { match: /things/, body: { has_more: true, data: [{ id: 'a' }, { id: 'b' }] } },
+    ])
+    const next = await ided.callTool(ctx(more), 'list_things', {})
+    expect(next.hasMore).toBe(true)
+    expect(next.nextCursor).toBe('b')
+  })
+
+  it('still infers from fullness when the vendor says nothing', async () => {
+    const ided = withTools(
+      [
+        {
+          name: 'list_things',
+          description: 'List things',
+          write: false,
+          request: 'GET /things',
+          args: {},
+          items: '$',
+        },
+      ],
+      { pagination: { style: 'id', size: 2, sizeParam: 'limit', param: 'after' } },
+    )
+    const full = fakeUpstream([{ match: /things/, body: [{ id: 'a' }, { id: 'b' }] }])
+    expect((await ided.callTool(ctx(full), 'list_things', {})).hasMore).toBe(true)
+
+    const short = fakeUpstream([{ match: /things/, body: [{ id: 'a' }] }])
+    expect((await ided.callTool(ctx(short), 'list_things', {})).hasMore).toBe(false)
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
