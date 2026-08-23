@@ -2,7 +2,7 @@
 
 # Selat
 
-**One credential for every tool your agent calls.**
+**One gateway, every tool, any agent.**
 
 You are building an agent. It needs GitHub, then Gmail, then Discord. Each one wants
 its own OAuth dance, its own token refresh, its own schema, its own error shape.
