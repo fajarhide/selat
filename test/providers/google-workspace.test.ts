@@ -211,6 +211,33 @@ describe('google drive', () => {
     expect(sent).toContain('new text')
   })
 
+  it('asks Drive for the fields a write tool promises to return', async () => {
+    // Drive answers a write with id, name and mimeType and nothing else unless
+    // the request names what it wants, so a tool that declares `trashed` has to
+    // ask for it or the key is silently absent.
+    const upstream = fakeUpstream([
+      { match: /files/, body: { id: 'f1', name: 'notes', trashed: true } },
+    ])
+    const result = await gdrive.callTool(ctx(upstream), 'trash_file', { file_id: 'f1' })
+    expect(new URL(upstream.calls[0]?.url ?? '').searchParams.get('fields')).toBe('id,name,trashed')
+    expect(result.content).toMatchObject({ trashed: true })
+  })
+
+  it('puts the selector in the query on an upload, not in the metadata part', async () => {
+    // On an upload the body is the multipart payload, so a fields argument that
+    // took the body path would be written into the file's metadata instead of
+    // reaching Drive as a parameter.
+    const upstream = fakeUpstream([{ match: /upload/, body: { id: 'new', name: 'n.txt' } }])
+    await gdrive.callTool(ctx(upstream), 'upload_file', {
+      name: 'n.txt',
+      content: Buffer.from('hi').toString('base64'),
+      mime_type: 'text/plain',
+    })
+    const call = upstream.calls[0]
+    expect(new URL(call?.url ?? '').searchParams.get('fields')).toBe('id,name,mimeType')
+    expect(Buffer.from(call?.init?.body as Uint8Array).toString()).not.toContain('fields')
+  })
+
   it('marks the tidying tools as writes, which is what a read only credential is refused on', () => {
     const writes = gdrive.listTools().filter((tool) => tool.write)
     expect(writes.map((tool) => tool.name)).toContain('delete_file')
