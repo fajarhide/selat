@@ -2,7 +2,7 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
-## Unreleased
+## 0.1.2 - 2026-08-23
 
 ### Added
 
