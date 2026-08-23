@@ -107,7 +107,14 @@ export type ToolManifest = {
   /** The request carries bytes. The named arguments are pulled out of the
    *  JSON body and sent as a multipart/related upload instead, which is how
    *  one call can carry a file's metadata and its contents together. */
-  upload?: { content: string; mimeType: string }
+  upload?: {
+    content: string
+    mimeType: string
+    /** The argument that names a file the gateway already holds, so bytes it
+     *  produced can go back out without passing through the model that asked
+     *  for them. */
+    fileId?: string
+  }
   /** The response carries bytes, not JSON. The result is {mime_type, size,
    *  data} with data base64, and fields and pagination do not apply. Drive
    *  answers files.get?alt=media and files.export this way. */
@@ -164,6 +171,7 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
       if (!tool) throw fail('tool_not_found', `${manifest.prefix} has no tool ${name}`)
 
       const args = validate(fail, tool, rawArgs)
+      await resolveFileArgument(ctx, tool, args, fail)
       const paging = pagingFor(manifest, tool)
       const cursor = readCursor(fail, paging, rawArgs)
       // The default does not count. Only a value the caller actually sent means
@@ -275,6 +283,45 @@ function withKeyInQuery(url: string, auth: AuthScheme, secret: string): string {
   const parsed = new URL(url)
   parsed.searchParams.set(auth.name, `${auth.prefix ?? ''}${secret}`)
   return parsed.toString()
+}
+
+/**
+ * Turns a file id into the bytes and media type the upload path expects, so a
+ * download and an upload can be joined without either set of bytes reaching the
+ * caller. Resolved before buildRequest because that one is synchronous, and
+ * because an argument that names something is not the same as one that is it.
+ */
+async function resolveFileArgument(
+  ctx: AdapterContext,
+  tool: ToolManifest,
+  args: Record<string, unknown>,
+  fail: Fail,
+): Promise<void> {
+  const upload = tool.upload
+  if (!upload?.fileId) return
+
+  const id = args[upload.fileId]
+  if (id === undefined) {
+    if (args[upload.content] === undefined) {
+      throw fail('invalid_arguments', `give either ${upload.content} or ${upload.fileId}`)
+    }
+    return
+  }
+  if (args[upload.content] !== undefined) {
+    throw fail('invalid_arguments', `give ${upload.content} or ${upload.fileId}, not both`)
+  }
+  if (!ctx.readFile) {
+    throw fail('invalid_arguments', `${upload.fileId} is not available on this deployment`)
+  }
+
+  const found = await ctx.readFile(ctx.workspaceId, String(id))
+  if (!found) throw fail('invalid_arguments', 'no such file, or it expired')
+
+  args[upload.content] = found.bytes.toString('base64')
+  // An explicit media type wins: the caller may be uploading a converted form
+  // of what was downloaded.
+  if (args[upload.mimeType] === undefined) args[upload.mimeType] = found.mimeType
+  delete args[upload.fileId]
 }
 
 function pagingFor(manifest: ProviderManifest, tool: ToolManifest): Pagination | undefined {

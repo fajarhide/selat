@@ -83,7 +83,20 @@ export async function callTool(deps: CallDeps, input: CallInput): Promise<ToolRe
   try {
     result = await withTimeout(
       adapter.callTool(
-        { workspaceId: input.workspaceId, requestId: input.requestId, accessToken, fetch },
+        {
+          workspaceId: input.workspaceId,
+          requestId: input.requestId,
+          accessToken,
+          fetch,
+          ...(deps.files
+            ? {
+                readFile: async (workspaceId: string, id: string) => {
+                  const found = await deps.files!.get(workspaceId, id)
+                  return found ? { mimeType: found.mimeType, bytes: found.bytes } : null
+                },
+              }
+            : {}),
+        },
         tool,
         input.args,
       ),
