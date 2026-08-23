@@ -1,0 +1,59 @@
+name: Provider request
+description: Ask for an upstream Selat does not reach yet
+labels: [enhancement, provider]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A provider here is manifest data rather than code: one entry describing
+        the endpoints, and the shared executor does the rest. So the useful
+        parts of this request are the links and the shape, not a design.
+  - type: input
+    id: service
+    attributes:
+      label: Which service
+      placeholder: Linear
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Link to its API reference
+      description: The page listing the endpoints, not the marketing page.
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How it authenticates
+      options:
+        - OAuth
+        - API key in a header
+        - API key in the query string
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: The three to five tools worth having
+      description: |
+        Every listed tool costs a slot in what an agent can see, so name the
+        ones you would actually call rather than the whole API. One line each,
+        with the endpoint if you know it.
+      placeholder: |
+        list_issues    GET /issues
+        get_issue      GET /issues/{id}
+        create_issue   POST /issues
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Can you test it against a real account
+      description: A provider nobody can call is a provider nobody can prove, and this repo does not merge tools it has not seen answer.
+      options:
+        - Yes, I have an account and can try a branch
+        - No
+    validations:
+      required: true

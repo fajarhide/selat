@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: selat
+          POSTGRES_PASSWORD: selat
+          POSTGRES_DB: selat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U selat"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://selat:selat@localhost:5432/selat_test
+      PUBLIC_URL: http://localhost:8080
+      VAULT_KEY: 11111111111111111111111111111111111111111111111111111111111111ff
+      # Job level on purpose: a step cannot read `secrets` in its own `if`, and
+      # cannot test env it declares itself. Absent, the publish step skips
+      # instead of failing, so this workflow is not red until the token exists.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      # A tag that disagrees with package.json publishes a version nobody can
+      # find again, so it fails here rather than on the registry.
+      - name: tag matches package.json
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          packaged="$(node -p 'require("./package.json").version')"
+          if [ "$tagged" != "$packaged" ]; then
+            echo "tag $GITHUB_REF_NAME says $tagged, package.json says $packaged"; exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # The README's first line is `npx selat`, so the tarball is checked for
+      # the two things that makes true: the entry point and the migrations.
+      - name: the packed tarball can actually run
+        run: |
+          npm pack
+          tar -tzf selat-*.tgz | grep -q 'package/dist/src/main.js'
+          tar -tzf selat-*.tgz | grep -q 'package/migrations/001_workspaces.sql'
+
+      - name: publish to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: github release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag

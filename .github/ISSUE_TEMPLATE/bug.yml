@@ -1,0 +1,45 @@
+name: Bug
+description: Something behaves differently from what it says it does
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The issues that get fixed fastest here carry a command someone else can
+        run and the line that decides the behaviour. If you have both, the rest
+        of this form is quick.
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The exact command or tool call, and what came back. Paste the real output rather than describing it.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where in the source, if you found it
+      description: "`file:line`. Say what you observed and what you diagnosed, separately, so nobody chases a mechanism that was a guess."
+      placeholder: src/adapters/providers/manifest.ts:520
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The gateway version, and the provider if this is about one.
+      placeholder: 0.1.0, gdrive
+    validations:
+      required: true
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: Before you post
+      options:
+        - label: I checked the pasted output for tokens, credentials and anything private
+          required: true
