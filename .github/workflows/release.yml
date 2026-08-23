@@ -6,6 +6,9 @@ on:
 
 permissions:
   contents: write
+  # npm provenance is signed through the workflow's OIDC identity, so without
+  # this the publish step fails on a flag rather than on the package.
+  id-token: write
 
 jobs:
   release:

@@ -2,7 +2,11 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
-## Unreleased
+## 0.1.0 - 2026-08-23
+
+First release on the registry. The version ran in production from 2026-08-17
+before it got there, so the deployments and this repository's history carry it
+earlier than npm does.
 
 ### Added
 
@@ -43,9 +47,3 @@ Notable changes, newest first. Dates are the day the work merged.
   not say whether it had (#45).
 - An empty `204` is read as an empty result rather than a parse failure.
   `delete_file` was the first tool in any provider to answer that way (#38).
-
-## 0.1.0
-
-Never published to the registry. It ran in production from 2026-08-17, so the
-version exists in deployments and in this repository's history, and `npx selat`
-did not work until the release workflow above.
