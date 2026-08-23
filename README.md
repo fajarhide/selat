@@ -187,7 +187,9 @@ before that has to reconnect once before its write tools work.
 
 If you want a provider that is not here, the adapter contract is small and the
 conformance suite tells you when you are done. See
-[Writing a provider](#writing-a-provider).
+[Writing a provider](#writing-a-provider). [CONTRIBUTING.md](CONTRIBUTING.md)
+covers the two rules that are not guessable from the code, and
+[CHANGELOG.md](CHANGELOG.md) is what changed and when.
 
 ## Connecting GitHub
 

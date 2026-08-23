@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/fajarhide/selat/security/advisories/new
+    about: A vulnerability, a leaked credential, or anything that should not be public while it is being fixed. Do not open a normal issue.
