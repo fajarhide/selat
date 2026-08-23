@@ -2,6 +2,16 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## Unreleased
+
+### Changed
+
+- A download larger than 256 KB is stored and answered as a `file_id` rather
+  than base64, and fetched at `GET /v1/files/{id}` with the same credential
+  that made the call. Bytes stop passing through the model, so the ceiling on a
+  download rises from 5 MB to 25 MB. Stored bytes live 24 hours, count against
+  a per-workspace quota, and are deleted with the workspace (#42).
+
 ## 0.1.0 - 2026-08-23
 
 First release on the registry. The version ran in production from 2026-08-17
