@@ -4,6 +4,12 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ## Unreleased
 
+### Added
+
+- `SECURITY.md`, naming what is worth attacking in a gateway that holds other
+  people's credentials, and which behaviours are known and deliberate so a
+  report about one gets a link rather than an advisory (#58).
+
 ### Changed
 
 - A download larger than 256 KB is stored and answered as a `file_id` rather
