@@ -184,15 +184,28 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
             const space = manifest.validate!.request.indexOf(' ')
             const method = manifest.validate!.request.slice(0, space)
             const path = manifest.validate!.request.slice(space + 1)
-            const res = await ctx.fetch(`${manifest.baseUrl}${path}`, {
-              method,
-              headers: {
-                ...manifest.headers,
-                ...authHeader(manifest.auth, ctx.accessToken ?? ''),
-              },
-            })
+            let res: Response
+            try {
+              res = await ctx.fetch(
+                withKeyInQuery(`${manifest.baseUrl}${path}`, manifest.auth, ctx.accessToken ?? ''),
+                {
+                  method,
+                  headers: {
+                    ...manifest.headers,
+                    ...authHeader(manifest.auth, ctx.accessToken ?? ''),
+                  },
+                },
+              )
+            } catch {
+              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+            }
             if (!res.ok) {
-              throw fail('invalid_credential', `${manifest.prefix} refused the api key`)
+              const code = res.status === 401 || res.status === 403 ? 'invalid_credential' : 'upstream_error'
+              const message =
+                code === 'invalid_credential'
+                  ? `${manifest.prefix} refused the api key`
+                  : `${manifest.prefix} validation request failed`
+              throw fail(code, message)
             }
           },
         }
