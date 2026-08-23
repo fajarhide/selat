@@ -42,7 +42,7 @@ the three to five worth having rather than wrapping an entire API.
 npm install
 npm test          # against a real Postgres, TEST_DATABASE_URL
 npm run typecheck
-npx selat         # the embedded database, no setup
+npx @fajarhide/selat   # the embedded database, no setup
 ```
 
 Tests use a real Postgres because the gateway does, and `docker compose up -d db`
