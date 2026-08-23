@@ -8,6 +8,7 @@ import { gdriveProvider } from './gdrive.ts'
 import { gmailProvider } from './gmail.ts'
 import { notionProvider } from './notion.ts'
 import { slackProvider } from './slack.ts'
+import { stripeProvider } from './stripe.ts'
 import { threadsProvider } from './threads.ts'
 import { xProvider } from './x.ts'
 
@@ -25,7 +26,7 @@ export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
   // An api key provider needs no OAuth application, so there is nothing for a
   // deployment to configure and nothing to gate on: every workspace brings its
   // own secret through PUT /v1/connections/:prefix/key.
-  const adapters: ProviderAdapter[] = [fakeProvider(), discordProvider()]
+  const adapters: ProviderAdapter[] = [fakeProvider(), discordProvider(), stripeProvider()]
   // Keyed on the grant's client id, not the prefix: gmail rides the google
   // application, so it appears the moment that one is configured.
   const gated = [
