@@ -27,7 +27,7 @@ export type AuthScheme =
     }
 
 export type ArgDef = {
-  type: 'string' | 'number' | 'boolean'
+  type: 'string' | 'number' | 'boolean' | 'string[]'
   description?: string
   required?: boolean
   enum?: string[]
@@ -39,6 +39,13 @@ export type ArgDef = {
    * X really does nest a reply as {reply: {in_reply_to_tweet_id}}.
    */
   param?: string
+  /**
+   * Where the argument travels. Defaults to the method rule: the query string
+   * on a GET or a DELETE, the JSON body otherwise. Drive moves a file with
+   * addParents and removeParents in the query of a PATCH, which the method
+   * alone cannot express.
+   */
+  in?: 'query' | 'body'
 }
 
 export type Pagination =
@@ -200,8 +207,10 @@ function toolDef(tool: ToolManifest): ToolDef {
   const properties: Record<string, object> = {}
   const required: string[] = []
   for (const [name, def] of Object.entries(tool.args)) {
+    const shape =
+      def.type === 'string[]' ? { type: 'array', items: { type: 'string' } } : { type: def.type }
     properties[name] = {
-      type: def.type,
+      ...shape,
       ...(def.description ? { description: def.description } : {}),
       ...(def.enum ? { enum: def.enum } : {}),
       ...(def.default === undefined ? {} : { default: def.default }),
@@ -249,11 +258,22 @@ function validate(fail: Fail, tool: ToolManifest, rawArgs: unknown): Record<stri
       continue
     }
 
-    const text = String(value)
-    if (def.enum && !def.enum.includes(text)) {
-      throw fail('invalid_arguments', `${name} must be one of ${def.enum.join(', ')}`)
+    const oneOf = (item: unknown): string => {
+      const text = String(item)
+      if (def.enum && !def.enum.includes(text)) {
+        throw fail('invalid_arguments', `${name} must be one of ${def.enum.join(', ')}`)
+      }
+      return text
     }
-    out[name] = text
+
+    // A bare value is taken as a one-element list, because an agent handed one
+    // label writes "bug" about as often as ["bug"].
+    if (def.type === 'string[]') {
+      out[name] = (Array.isArray(value) ? value : [value]).map(oneOf)
+      continue
+    }
+
+    out[name] = oneOf(value)
   }
 
   return out
@@ -300,17 +320,19 @@ function buildRequest(
 
   const query = new URLSearchParams()
   const body: Record<string, unknown> = {}
-  const toQuery = method === 'GET' || method === 'DELETE'
-  const put = (key: string, value: unknown) => {
-    if (toQuery) query.set(key, String(value))
-    else setPath(body, key, value)
+  const byMethod = method === 'GET' || method === 'DELETE' ? 'query' : 'body'
+  const put = (key: string, value: unknown, where: 'query' | 'body' = byMethod) => {
+    if (where === 'body') setPath(body, key, value)
+    // Comma-joined, the form Drive documents for addParents. A vendor that
+    // wants ?k=a&k=b repeated instead will need that choice on the ArgDef.
+    else query.set(key, Array.isArray(value) ? value.join(',') : String(value))
   }
 
   for (const [name, def] of Object.entries(tool.args)) {
     if (inPath.has(name)) continue
     const value = args[name]
     if (value === undefined) continue
-    put(def.param ?? name, value)
+    put(def.param ?? name, value, def.in)
   }
 
   if (paging?.style === 'page') {
@@ -325,7 +347,7 @@ function buildRequest(
   }
 
   const search = query.toString()
-  const hasBody = !toQuery && Object.keys(body).length > 0
+  const hasBody = Object.keys(body).length > 0
 
   return {
     url: `${manifest.baseUrl}${path}${search ? `?${search}` : ''}`,
