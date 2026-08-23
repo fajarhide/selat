@@ -65,6 +65,11 @@ jobs:
           tarball="$(ls ./*.tgz)"
           tar -tzf "$tarball" | grep -q 'package/dist/src/main.js'
           tar -tzf "$tarball" | grep -q 'package/migrations/001_workspaces.sql'
+          # dist mirrors the repository, so a files entry of "dist" ships the
+          # whole compiled test suite. It did, until this checked.
+          if tar -tzf "$tarball" | grep -q 'package/dist/test/'; then
+            echo "the tarball carries the test suite"; exit 1
+          fi
 
       - name: publish to npm
         if: ${{ env.NPM_TOKEN != '' }}
