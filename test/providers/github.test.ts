@@ -28,6 +28,102 @@ describe('github provider conformance', () => {
   })
 })
 
+describe('github pull requests', () => {
+  it('keeps the head sha on a listed pull request, so checks need no second call', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /pulls/,
+        body: [
+          {
+            number: 43,
+            title: 'fix something',
+            state: 'open',
+            draft: false,
+            user: { login: 'ada', email: 'drop@me.test' },
+            head: { sha: 'deadbeef', ref: 'topic' },
+            html_url: 'https://github.test/pr/43',
+            updated_at: '2026-08-23T00:00:00Z',
+          },
+        ],
+      },
+    ])
+    const result = await github.callTool(ctx(upstream), 'list_pull_requests', {
+      owner: 'o',
+      repo: 'r',
+    })
+    expect(result.content).toEqual({
+      items: [
+        {
+          number: 43,
+          title: 'fix something',
+          state: 'open',
+          draft: false,
+          user: { login: 'ada' },
+          head: { sha: 'deadbeef' },
+          html_url: 'https://github.test/pr/43',
+          updated_at: '2026-08-23T00:00:00Z',
+        },
+      ],
+    })
+    expect(new URL(upstream.calls[0]?.url ?? '').searchParams.get('state')).toBe('open')
+  })
+
+  it('reads the check runs off the array the endpoint nests them in', async () => {
+    // The response is {total_count, check_runs: [...]}, not a bare array, so a
+    // wrong items path would report a healthy commit as having no checks.
+    const upstream = fakeUpstream([
+      {
+        match: /check-runs/,
+        body: {
+          total_count: 2,
+          check_runs: [
+            { name: 'test', status: 'completed', conclusion: 'success', noise: 'x' },
+            { name: 'secrets', status: 'completed', conclusion: 'success' },
+          ],
+        },
+      },
+    ])
+    const result = await github.callTool(ctx(upstream), 'list_check_runs', {
+      owner: 'o',
+      repo: 'r',
+      ref: 'deadbeef',
+    })
+    expect(result.content).toEqual({
+      items: [
+        { name: 'test', status: 'completed', conclusion: 'success' },
+        { name: 'secrets', status: 'completed', conclusion: 'success' },
+      ],
+    })
+    expect(upstream.calls[0]?.url).toContain('/commits/deadbeef/check-runs')
+  })
+
+  it('separates a review verdict from the line a comment sits on', async () => {
+    const reviews = fakeUpstream([
+      { match: /reviews/, body: [{ id: 1, user: { login: 'ada' }, state: 'CHANGES_REQUESTED', body: 'no' }] },
+    ])
+    const verdicts = await github.callTool(ctx(reviews), 'list_pull_request_reviews', {
+      owner: 'o',
+      repo: 'r',
+      number: 43,
+    })
+    expect(verdicts.content).toEqual({
+      items: [{ id: 1, user: { login: 'ada' }, state: 'CHANGES_REQUESTED', body: 'no' }],
+    })
+
+    const inline = fakeUpstream([
+      { match: /comments/, body: [{ id: 9, user: { login: 'ada' }, path: 'src/a.ts', line: 12, body: 'here' }] },
+    ])
+    const comments = await github.callTool(ctx(inline), 'list_pull_request_comments', {
+      owner: 'o',
+      repo: 'r',
+      number: 43,
+    })
+    expect(comments.content).toEqual({
+      items: [{ id: 9, user: { login: 'ada' }, path: 'src/a.ts', line: 12, body: 'here' }],
+    })
+  })
+})
+
 describe('github provider', () => {
   it('advances the cursor only when a full page came back', async () => {
     const full = fakeUpstream([{ match: /issues/, body: itemsPage(30) }])
