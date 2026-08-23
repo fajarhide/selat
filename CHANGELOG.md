@@ -6,6 +6,8 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ### Added
 
+- Credential scoping is documented. `{providers, readOnly}` has been enforced
+  since before this changelog and appeared in no README (#65).
 - `GET /v1/catalog`, unauthenticated, reporting what this deployment booted with
   the tool names it serves, so a site rendering a page per provider does not
   keep its own copy of the truth (#62).
@@ -20,6 +22,11 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ### Fixed
 
+- A read-only credential is no longer shown the write tools it will be refused.
+  Both tool lists filtered on the provider alone and ignored `readOnly`, so a
+  Drive-scoped read-only credential was offered `delete_file` and found out by
+  spending a turn on it. A tool is listed exactly when the same scope would let
+  it be called (#64).
 - A redirect to another origin no longer carries the credential. `fetch`
   followed redirects by default, so a 302 took the `Authorization` header
   wherever an upstream pointed, and an `api_key` provider its named header.

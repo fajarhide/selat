@@ -7,7 +7,7 @@ import { meteredCall } from '../../application/metering.ts'
 import type { Pool } from '../../adapters/db/pool.ts'
 import { listWorkspaceTools, TOOL_BUDGET } from '../../application/catalog.ts'
 import { callSearchTool, searchToolDefinition, SEARCH_TOOL } from '../../application/meta-tools.ts'
-import { scopeAllowsProvider } from '../../domain/credential.ts'
+import { scopeAllowsTool } from '../../domain/credential.ts'
 import { toEnvelope } from '../../domain/errors.ts'
 
 export const SERVER_INFO = { name: 'selat', version: '0.1.0' } as const
@@ -28,7 +28,7 @@ export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
       // tool reports is what this credential can actually reach, and a
       // provider-scoped bearer never learns that other providers are connected.
       const { tools } = await listWorkspaceTools(deps, gateway.workspaceId, { limit: null })
-      const visible = tools.filter((tool) => scopeAllowsProvider(gateway.scope, tool.provider))
+      const visible = tools.filter((tool) => scopeAllowsTool(gateway.scope, tool))
       const listed = visible.slice(0, TOOL_BUDGET)
       const meta =
         visible.length === 0
