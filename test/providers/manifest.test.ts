@@ -338,6 +338,115 @@ describe('manifest executor: requests', () => {
     expect(wide.content).toEqual({ items: [{ id: 1, kind: 'noise' }] })
   })
 
+  it('carries the credential through a same-origin redirect', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /\/things\/moved/,
+        status: 302,
+        body: {},
+        headers: { location: 'https://api.demo.test/things/here' },
+      },
+      { match: /\/things\/here/, body: { id: 1 } },
+    ])
+    const demoTools = withTools([
+      {
+        name: 'get_moved',
+        description: 'Fetch a thing that moved',
+        write: false,
+        request: 'GET /things/moved',
+        args: {},
+      },
+    ])
+    const result = await demoTools.callTool(ctx(upstream), 'get_moved', {})
+    expect(result.content).toEqual({ id: 1 })
+    const second = upstream.calls[1]?.init?.headers as Record<string, string>
+    expect(second['authorization']).toBe('Bearer secret-token')
+  })
+
+  it('drops the credential when a redirect crosses to another origin', async () => {
+    // A Drive download answers with exactly this, to googleusercontent.com, and
+    // the target carries its own signature. Left to fetch's default the bearer
+    // would travel to whatever address the upstream chose.
+    const upstream = fakeUpstream([
+      {
+        match: /api\.demo\.test\/things\/moved/,
+        status: 302,
+        body: {},
+        headers: { location: 'https://files.elsewhere.test/blob' },
+      },
+      { match: /elsewhere/, body: { id: 1 } },
+    ])
+    const demoTools = withTools([
+      {
+        name: 'get_moved',
+        description: 'Fetch a thing that moved',
+        write: false,
+        request: 'GET /things/moved',
+        args: {},
+      },
+    ])
+    const result = await demoTools.callTool(ctx(upstream), 'get_moved', {})
+    expect(result.content).toEqual({ id: 1 })
+
+    const second = upstream.calls[1]
+    expect(second?.url).toContain('elsewhere.test')
+    const headers = second?.init?.headers as Record<string, string>
+    expect(headers['authorization']).toBeUndefined()
+    // The manifest's own headers are not credentials and travel on.
+    expect(headers['accept']).toBe('application/demo+json')
+  })
+
+  it('drops an api key header across origins too, not only the bearer', async () => {
+    const keyed = withTools(
+      [
+        {
+          name: 'get_moved',
+          description: 'Fetch a thing that moved',
+          write: false,
+          request: 'GET /things/moved',
+          args: {},
+        },
+      ],
+      { auth: { type: 'api_key', in: 'header', name: 'x-api-key' } },
+    )
+    const upstream = fakeUpstream([
+      {
+        match: /api\.demo\.test/,
+        status: 302,
+        body: {},
+        headers: { location: 'https://files.elsewhere.test/blob' },
+      },
+      { match: /elsewhere/, body: { id: 1 } },
+    ])
+    await keyed.callTool(ctx(upstream), 'get_moved', {})
+    const headers = upstream.calls[1]?.init?.headers as Record<string, string>
+    expect(headers['x-api-key']).toBeUndefined()
+  })
+
+  it('does not follow a redirect on a write, so a body is never replayed elsewhere', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /things/,
+        status: 302,
+        body: {},
+        headers: { location: 'https://files.elsewhere.test/blob' },
+      },
+    ])
+    const writer = withTools([
+      {
+        name: 'make_thing',
+        description: 'Make one thing',
+        write: true,
+        request: 'POST /things',
+        args: { title: { type: 'string', required: true } },
+      },
+    ])
+    await expect(writer.callTool(ctx(upstream), 'make_thing', { title: 't' })).rejects.toMatchObject(
+      { code: 'upstream_error' },
+    )
+    expect(upstream.calls).toHaveLength(1)
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
