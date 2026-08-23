@@ -141,6 +141,8 @@ export type ProviderManifest = {
   baseUrl: string
   scopes: string[]
   auth: AuthScheme
+  /** Optional request made before an api key is stored in the vault. */
+  validate?: { request: `${Method} /${string}` }
   /** Merged under the headers the executor sets, never over them. */
   headers?: Record<string, string>
   pagination?: Pagination
@@ -175,6 +177,26 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
     scopes: manifest.scopes,
     credential: manifest.auth.type === 'api_key' ? 'api_key' : 'oauth',
     listTools: () => manifest.tools.map(toolDef),
+
+    ...(manifest.validate
+      ? {
+          async validateKey(ctx: AdapterContext): Promise<void> {
+            const space = manifest.validate!.request.indexOf(' ')
+            const method = manifest.validate!.request.slice(0, space)
+            const path = manifest.validate!.request.slice(space + 1)
+            const res = await ctx.fetch(`${manifest.baseUrl}${path}`, {
+              method,
+              headers: {
+                ...manifest.headers,
+                ...authHeader(manifest.auth, ctx.accessToken ?? ''),
+              },
+            })
+            if (!res.ok) {
+              throw fail('invalid_credential', `${manifest.prefix} refused the api key`)
+            }
+          },
+        }
+      : {}),
 
     async callTool(ctx: AdapterContext, name: string, rawArgs: unknown): Promise<ToolResult> {
       const tool = byName.get(name)

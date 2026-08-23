@@ -25,6 +25,7 @@ export const discordManifest: ProviderManifest = {
   // there is no scope list to ask for here.
   scopes: [],
   auth: { type: 'api_key', in: 'header', name: 'authorization', prefix: 'Bot ' },
+  validate: { request: 'GET /users/@me' },
   pagination: {
     // Discord sends no cursor back. The caller asks for what came before the
     // oldest id it holds, so the cursor is a message id read off the page.

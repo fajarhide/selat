@@ -53,6 +53,7 @@ export interface ProviderAdapter {
    */
   credential?: 'oauth' | 'api_key' | 'none'
   listTools(): ToolDef[]
+  validateKey?(ctx: AdapterContext): Promise<void>
   callTool(ctx: AdapterContext, tool: string, args: unknown): Promise<ToolResult>
   mapError(err: unknown): GatewayError
 }

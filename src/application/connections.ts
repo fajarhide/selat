@@ -21,6 +21,7 @@ export type ConnectionDeps = {
   states: StateStore
   grants: GrantStore
   enablement: EnablementStore
+  fetch?: typeof fetch
   exchange?: typeof exchangeCode
 }
 
@@ -135,6 +136,15 @@ export async function setApiKey(
   }
   const key = input.key.trim()
   if (!key) throw new GatewayError('invalid_arguments', 'api_key must not be empty')
+
+  if (adapter.validateKey) {
+    await adapter.validateKey({
+      workspaceId: input.workspaceId,
+      requestId: `key-validation-${input.prefix}`,
+      accessToken: key,
+      fetch: deps.fetch ?? fetch,
+    })
+  }
 
   await deps.grants.save(input.workspaceId, adapter.grantId, {
     accessToken: key,
