@@ -63,4 +63,5 @@ at merge time, so adding it afterwards does nothing.
 A vulnerability, a leaked credential, or anything that should not be public
 while it is being fixed goes through
 [a security advisory](https://github.com/fajarhide/selat/security/advisories/new),
-not an issue.
+not an issue. [SECURITY.md](SECURITY.md) says what is worth attacking here and
+which behaviours are known and deliberate.
