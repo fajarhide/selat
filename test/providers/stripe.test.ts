@@ -52,6 +52,34 @@ describe('stripe', () => {
     expect(params.get('limit')).toBe('25')
   })
 
+  it('sends the filters under the names Stripe documents, brackets and all', async () => {
+    const upstream = fakeUpstream([{ match: /charges/, body: { has_more: false, data: [] } }])
+    await stripe.callTool(ctx(upstream), 'list_charges', {
+      customer: 'cus_1',
+      payment_intent: 'pi_1',
+      transfer_group: 'group_a',
+      created_after: 1679090000,
+      created_before: 1679099999,
+    })
+    const params = new URL(upstream.calls[0]?.url ?? '').searchParams
+    expect(params.get('customer')).toBe('cus_1')
+    expect(params.get('payment_intent')).toBe('pi_1')
+    expect(params.get('transfer_group')).toBe('group_a')
+    // Stripe documents the range as created.gte and takes it form encoded as
+    // created[gte]. Getting this wrong is silent: the filter is ignored and the
+    // answer looks fine.
+    expect(params.get('created[gte]')).toBe('1679090000')
+    expect(params.get('created[lte]')).toBe('1679099999')
+  })
+
+  it('leaves out a filter the caller did not set, rather than sending an empty one', async () => {
+    const upstream = fakeUpstream([{ match: /customers/, body: { has_more: false, data: [] } }])
+    await stripe.callTool(ctx(upstream), 'list_customers', { email: 'a@b.test' })
+    const url = upstream.calls[0]?.url ?? ''
+    expect(new URL(url).searchParams.get('email')).toBe('a@b.test')
+    expect(url).not.toContain('created')
+  })
+
   it('keeps the ten fields worth reading out of a fifty field charge', async () => {
     const upstream = fakeUpstream([
       {

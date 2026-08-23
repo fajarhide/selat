@@ -28,6 +28,23 @@ const CHARGE_FIELDS = [
   'receipt_url',
 ]
 
+// Stripe filters a date range through a nested parameter, documented as
+// created.gte and sent form encoded as created[gte]. Declared as two flat
+// arguments because an agent handles two integers better than one object, and
+// because ArgDef has no object type.
+const CREATED_RANGE = {
+  created_after: {
+    type: 'number',
+    description: 'Unix seconds. Only objects created at or after this',
+    param: 'created[gte]',
+  },
+  created_before: {
+    type: 'number',
+    description: 'Unix seconds. Only objects created at or before this',
+    param: 'created[lte]',
+  },
+} as const
+
 export const stripeManifest: ProviderManifest = {
   id: 'stripe',
   prefix: 'stripe',
@@ -59,7 +76,13 @@ export const stripeManifest: ProviderManifest = {
       description: 'List customers, most recently created first',
       write: false,
       request: 'GET /v1/customers',
-      args: {},
+      args: {
+        email: {
+          type: 'string',
+          description: 'Exact match on the customer email, and case sensitive',
+        },
+        ...CREATED_RANGE,
+      },
       items: 'data',
       fields: CUSTOMER_FIELDS,
     },
@@ -76,7 +99,12 @@ export const stripeManifest: ProviderManifest = {
       description: 'List charges, most recently created first',
       write: false,
       request: 'GET /v1/charges',
-      args: {},
+      args: {
+        customer: { type: 'string', description: 'Only charges for this customer id' },
+        payment_intent: { type: 'string', description: 'Only charges from this PaymentIntent' },
+        transfer_group: { type: 'string', description: 'Only charges in this transfer group' },
+        ...CREATED_RANGE,
+      },
       items: 'data',
       fields: CHARGE_FIELDS,
     },
