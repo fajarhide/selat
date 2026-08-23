@@ -214,6 +214,63 @@ describe('manifest executor: requests', () => {
     expect(result.content).toEqual({})
   })
 
+  it('sends an upload as multipart, with the metadata as JSON and the bytes decoded', async () => {
+    const uploader = withTools([
+      {
+        name: 'upload_thing',
+        description: 'Upload one thing',
+        write: true,
+        request: 'POST /upload/things',
+        upload: { content: 'content', mimeType: 'mime_type' },
+        args: {
+          name: { type: 'string', required: true },
+          content: { type: 'base64', required: true },
+          mime_type: { type: 'string', required: true },
+        },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /things/, body: { id: 't1' } }])
+    await uploader.callTool(ctx(upstream), 'upload_thing', {
+      name: 'notes.txt',
+      content: Buffer.from('hello bytes').toString('base64'),
+      mime_type: 'text/plain',
+    })
+    const call = upstream.calls[0]
+    const type = (call?.init?.headers as Record<string, string>)['content-type'] ?? ''
+    expect(type).toMatch(/^multipart\/related; boundary=selat-/)
+
+    const sent = Buffer.from(call?.init?.body as Uint8Array).toString()
+    expect(sent).toContain('{"name":"notes.txt"}')
+    expect(sent).toContain('content-type: text/plain')
+    // The bytes go on the wire decoded, not as the base64 the agent sent.
+    expect(sent).toContain('hello bytes')
+    expect(sent).not.toContain(Buffer.from('hello bytes').toString('base64'))
+  })
+
+  it('refuses an argument that is not base64, rather than uploading the garbage', async () => {
+    const uploader = withTools([
+      {
+        name: 'upload_thing',
+        description: 'Upload one thing',
+        write: true,
+        request: 'POST /upload/things',
+        upload: { content: 'content', mimeType: 'mime_type' },
+        args: {
+          content: { type: 'base64', required: true },
+          mime_type: { type: 'string', required: true },
+        },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /things/, body: { id: 't1' } }])
+    await expect(
+      uploader.callTool(ctx(upstream), 'upload_thing', {
+        content: 'not base64!',
+        mime_type: 'text/plain',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+    expect(upstream.calls).toHaveLength(0)
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.

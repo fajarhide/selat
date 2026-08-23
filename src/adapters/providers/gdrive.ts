@@ -175,6 +175,52 @@ export const gdriveManifest: ProviderManifest = {
       fields: ['id', 'role', 'type'],
     },
     {
+      name: 'upload_file',
+      description:
+        'Upload a new file with its contents. The whole call is capped near 750 KB of file, so hand it text and small documents rather than media',
+      write: true,
+      request: 'POST /upload/drive/v3/files',
+      upload: { content: 'content', mimeType: 'mime_type' },
+      args: {
+        name: { type: 'string', required: true },
+        content: { type: 'base64', required: true, description: 'The file bytes, base64 encoded' },
+        mime_type: {
+          type: 'string',
+          required: true,
+          description: 'Media type of the bytes, for example text/plain or application/pdf',
+        },
+        parents: { type: 'string[]', description: 'Folder ids to put it in' },
+        upload_type: {
+          type: 'string',
+          description: 'Leave as multipart, which sends the name and the bytes together',
+          default: 'multipart',
+          in: 'query',
+          param: 'uploadType',
+        },
+      },
+      fields: ['id', 'name', 'mimeType'],
+    },
+    {
+      name: 'replace_file_content',
+      description: 'Replace what is inside an existing file, keeping its id, name and folder',
+      write: true,
+      request: 'PATCH /upload/drive/v3/files/{file_id}',
+      upload: { content: 'content', mimeType: 'mime_type' },
+      args: {
+        file_id: { type: 'string', required: true },
+        content: { type: 'base64', required: true, description: 'The new bytes, base64 encoded' },
+        mime_type: { type: 'string', required: true, description: 'Media type of the new bytes' },
+        upload_type: {
+          type: 'string',
+          description: 'Leave as multipart',
+          default: 'multipart',
+          in: 'query',
+          param: 'uploadType',
+        },
+      },
+      fields: ['id', 'name', 'mimeType'],
+    },
+    {
       name: 'download_file',
       description:
         'Download the bytes of one file. Google Docs, Sheets and Slides have no bytes of their own, so use export_file for those',
