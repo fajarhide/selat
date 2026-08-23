@@ -33,9 +33,18 @@
     "selat": "dist/src/main.js"
   },
   "files": [
-    "dist",
+    "dist/src",
     "migrations",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fajarhide/selat.git"
+  },
+  "homepage": "https://selat.weekndlabs.com",
+  "bugs": {
+    "url": "https://github.com/fajarhide/selat/issues"
+  }
 }
