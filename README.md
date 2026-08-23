@@ -171,6 +171,7 @@ agent that silently reasons over half a page is worse than one that errors.
 | `gcal` | beta | Calendars, event list and get |
 | `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete. A download past 256 KB comes back as a file id rather than base64 |
 | `discord` | beta | Bot user, guilds, channels, message list and post |
+| `stripe` | experimental | Customers and charges, read only. Generated from the docs and never run against the vendor |
 | `facebook` | beta | Authenticated user |
 | `x` | experimental | User, post list and get, recent search, create post |
 | `threads` | experimental | Profile, post list and get, replies |

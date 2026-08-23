@@ -447,9 +447,10 @@ function readCursor(
   const raw = ((rawArgs ?? {}) as Record<string, unknown>).cursor
   if (raw === undefined || raw === null || raw === '') return undefined
 
-  // A cursor-style token was minted upstream, so this gateway has nothing to
-  // check it against. A page number it did mint, so that one is checked.
-  if (paging.style === 'cursor') return String(raw)
+  // A token minted upstream is not ours to validate: a cursor is opaque, and an
+  // id style pages by the id of the last object seen, which is a string like
+  // cus_24. Only a page number was minted here, so only that one is checked.
+  if (paging.style === 'cursor' || paging.style === 'id') return String(raw)
 
   const page = Number(raw)
   if (!Number.isInteger(page) || page < 1) {

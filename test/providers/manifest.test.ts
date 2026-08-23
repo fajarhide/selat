@@ -500,6 +500,43 @@ describe('manifest executor: requests', () => {
     expect((await ided.callTool(ctx(short), 'list_things', {})).hasMore).toBe(false)
   })
 
+  it('accepts back the id cursor it just issued, even when it is not a number', async () => {
+    // The executor minted cus_24 as nextCursor and then rejected it, because
+    // only the cursor style was treated as upstream-minted. Discord survived
+    // only because a snowflake happens to parse as an integer.
+    const ided = withTools(
+      [
+        {
+          name: 'list_things',
+          description: 'List things',
+          write: false,
+          request: 'GET /things',
+          args: {},
+          items: 'data',
+        },
+      ],
+      { pagination: { style: 'id', size: 2, sizeParam: 'limit', param: 'starting_after' } },
+    )
+    const first = fakeUpstream([
+      { match: /things/, body: { data: [{ id: 'cus_a' }, { id: 'cus_b' }] } },
+    ])
+    const page = await ided.callTool(ctx(first), 'list_things', {})
+    expect(page.nextCursor).toBe('cus_b')
+
+    const second = fakeUpstream([{ match: /things/, body: { data: [] } }])
+    await expect(
+      ided.callTool(ctx(second), 'list_things', { cursor: page.nextCursor }),
+    ).resolves.toBeDefined()
+    expect(new URL(second.calls[0]?.url ?? '').searchParams.get('starting_after')).toBe('cus_b')
+  })
+
+  it('still refuses a page number it never issued', async () => {
+    const upstream = fakeUpstream([{ match: /boxes/, body: itemsPage(1) }])
+    await expect(
+      demo.callTool(ctx(upstream), 'list_things', { box: 'b', cursor: 'not-a-page' }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
