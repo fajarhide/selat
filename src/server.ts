@@ -80,6 +80,35 @@ export function createServer(deps: ServerDeps): express.Express {
     res.json({ status: 'ok' })
   })
 
+  /**
+   * What this deployment booted, with no credential, because the site that
+   * renders a page per provider must not need a workspace to know what exists.
+   * Keeping its own copy is how it once published a tool the gateway never had.
+   *
+   * Carries no workspace, no connected account and no scope. It does say which
+   * OAuth applications this instance has configured, which is the point for a
+   * hosted gateway and a small disclosure for a private one.
+   */
+  app.get('/v1/catalog', (_req, res) => {
+    const providers = deps.registry.all().map((adapter) => {
+      const tools = adapter.listTools().map((tool) => `${adapter.prefix}__${tool.name}`)
+      return {
+        id: adapter.id,
+        prefix: adapter.prefix,
+        maturity: adapter.maturity,
+        credential: adapter.credential,
+        tool_count: tools.length,
+        tools,
+      }
+    })
+    res.setHeader('cache-control', 'public, max-age=300')
+    res.json({
+      providers,
+      provider_count: providers.length,
+      tool_count: providers.reduce((total, provider) => total + provider.tool_count, 0),
+    })
+  })
+
   // Readiness fails the deploy rather than every call when the database is
   // unreachable or the vault key never loaded.
   app.get('/v1/ready', async (_req, res) => {
