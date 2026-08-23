@@ -147,7 +147,7 @@ agent that silently reasons over half a page is worse than one that errors.
 
 | Provider | Maturity | Tools |
 |---|---|---|
-| `github` | beta | Repository search, issues list, get and create, authenticated user |
+| `github` | beta | Repository search, issues list, get and create, pull requests list and get, review comments, reviews, check runs, authenticated user |
 | `gmail` | beta | Profile, message list and get, label |
 | `gcal` | beta | Calendars, event list and get |
 | `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete |
