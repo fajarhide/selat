@@ -97,6 +97,13 @@ export type ToolManifest = {
   items?: string
   /** Dotted paths kept in the result. Absent returns the response whole. */
   fields?: string[]
+  /**
+   * The argument that carries the upstream's own field selector. When a caller
+   * sets it, `fields` is skipped: the upstream has already narrowed the
+   * response to exactly what was asked for, and projecting again can only take
+   * away fields the caller named on purpose.
+   */
+  selector?: string
   /** The request carries bytes. The named arguments are pulled out of the
    *  JSON body and sent as a multipart/related upload instead, which is how
    *  one call can carry a file's metadata and its contents together. */
@@ -158,6 +165,11 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
       const args = validate(fail, tool, rawArgs)
       const paging = pagingFor(manifest, tool)
       const cursor = readCursor(fail, paging, rawArgs)
+      // The default does not count. Only a value the caller actually sent means
+      // they chose the shape of the response.
+      const chose =
+        tool.selector !== undefined &&
+        (rawArgs as Record<string, unknown> | null)?.[tool.selector] !== undefined
       const request = buildRequest(manifest, tool, args, paging, cursor)
 
       const secret = ctx.accessToken ?? ''
@@ -171,7 +183,7 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
         },
       })
 
-      return readResponse(manifest, tool, paging, cursor, res, fail)
+      return readResponse(manifest, tool, paging, cursor, res, fail, chose)
     },
 
     mapError(err: unknown): GatewayError {
@@ -444,6 +456,7 @@ async function readResponse(
   cursor: string | number | undefined,
   res: Response,
   fail: Fail,
+  callerChoseFields = false,
 ): Promise<ToolResult> {
   const rules = manifest.errors ?? {}
   const failure = rules.bodyFailure
@@ -514,15 +527,17 @@ async function readResponse(
     )
   }
 
+  const keep = (value: unknown) => (callerChoseFields ? value : project(value, tool.fields))
+
   if (tool.binary) return binaryResult(fail, manifest.prefix, res)
 
   if (!paging || !tool.items) {
-    return { content: project(body, tool.fields), nextCursor: null, hasMore: false }
+    return { content: keep(body), nextCursor: null, hasMore: false }
   }
 
   const found = tool.items === '$' ? body : getPath(body, tool.items)
   const list = Array.isArray(found) ? found : []
-  const items = list.map((item) => project(item, tool.fields))
+  const items = list.map((item) => keep(item))
 
   if (paging.style === 'page') {
     const hasMore = list.length === paging.size
