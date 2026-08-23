@@ -3,8 +3,9 @@ import type { ProviderAdapter } from './registry.ts'
 
 // Drive v3 returns id, name and mimeType and nothing else unless the request
 // names the fields it wants. Declaring it as an argument with a default is how
-// a manifest sends a fixed query parameter today, and it leaves an agent able
-// to widen the selection when it genuinely needs more.
+// a manifest sends a fixed query parameter today. `selector` is what makes the
+// widening real: set response_fields and the result comes back whole, because
+// Drive has already narrowed it to what was asked for.
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const FILE_FIELDS = 'id,name,mimeType,modifiedTime,size,webViewLink,owners(emailAddress)'
 
@@ -32,6 +33,7 @@ export const gdriveManifest: ProviderManifest = {
       description: 'Read the account behind this connection and how much Drive storage it has used',
       write: false,
       request: 'GET /drive/v3/about',
+      selector: 'response_fields',
       args: {
         response_fields: {
           type: 'string',
@@ -47,6 +49,7 @@ export const gdriveManifest: ProviderManifest = {
       description: 'List or search files, using Drive query syntax such as "name contains report"',
       write: false,
       request: 'GET /drive/v3/files',
+      selector: 'response_fields',
       args: {
         query: {
           type: 'string',
@@ -73,6 +76,7 @@ export const gdriveManifest: ProviderManifest = {
       description: 'Fetch one file by id, with its owner and a link to open it',
       write: false,
       request: 'GET /drive/v3/files/{file_id}',
+      selector: 'response_fields',
       args: {
         file_id: { type: 'string', required: true },
         response_fields: {

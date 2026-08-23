@@ -271,6 +271,65 @@ describe('manifest executor: requests', () => {
     expect(upstream.calls).toHaveLength(0)
   })
 
+  it('lets a caller-supplied selector win over the manifest projection', async () => {
+    // The projection trims noise the caller did not ask about. A caller who
+    // names the fields has already done that job, upstream, and projecting
+    // again can only remove a field they asked for on purpose.
+    const picky = withTools([
+      {
+        name: 'get_thing',
+        description: 'Fetch one thing',
+        write: false,
+        request: 'GET /things/{id}',
+        selector: 'response_fields',
+        args: {
+          id: { type: 'string', required: true },
+          response_fields: { type: 'string', default: 'id,name', param: 'fields' },
+        },
+        fields: ['id', 'name'],
+      },
+    ])
+    const body = { id: 't1', name: 'thing', parents: ['box-a'], kind: 'noise' }
+
+    const untouched = fakeUpstream([{ match: /things/, body }])
+    const projected = await picky.callTool(ctx(untouched), 'get_thing', { id: 't1' })
+    expect(projected.content).toEqual({ id: 't1', name: 'thing' })
+
+    const widened = fakeUpstream([{ match: /things/, body }])
+    const whole = await picky.callTool(ctx(widened), 'get_thing', {
+      id: 't1',
+      response_fields: 'id,name,parents',
+    })
+    expect(whole.content).toEqual(body)
+    expect(new URL(widened.calls[0]?.url ?? '').searchParams.get('fields')).toBe('id,name,parents')
+  })
+
+  it('still projects paginated items when the caller named no fields', async () => {
+    const listing = withTools([
+      {
+        name: 'list_things',
+        description: 'List things',
+        write: false,
+        request: 'GET /things',
+        selector: 'response_fields',
+        args: { response_fields: { type: 'string', default: 'items(id)', param: 'fields' } },
+        items: 'items',
+        fields: ['id'],
+      },
+    ])
+    const body = { items: [{ id: 1, kind: 'noise' }] }
+    const plain = fakeUpstream([{ match: /things/, body }])
+    expect((await listing.callTool(ctx(plain), 'list_things', {})).content).toEqual({
+      items: [{ id: 1 }],
+    })
+
+    const asked = fakeUpstream([{ match: /things/, body }])
+    const wide = await listing.callTool(ctx(asked), 'list_things', {
+      response_fields: 'items(id,kind)',
+    })
+    expect(wide.content).toEqual({ items: [{ id: 1, kind: 'noise' }] })
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
