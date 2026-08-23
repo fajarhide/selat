@@ -142,4 +142,45 @@ describe('google drive', () => {
     expect(url.searchParams.get('mimeType')).toBe('text/plain')
     expect(result.content).toMatchObject({ mime_type: 'text/plain', size: 7 })
   })
+
+  it('moves a file with its parents in the query of a PATCH, where Drive wants them', async () => {
+    const upstream = fakeUpstream([{ match: /files/, body: { id: 'f1', name: 'notes' } }])
+    await gdrive.callTool(ctx(upstream), 'move_file', {
+      file_id: 'f1',
+      add_parents: ['folder-b'],
+      remove_parents: ['folder-a'],
+    })
+    const call = upstream.calls[0]
+    const params = new URL(call?.url ?? '').searchParams
+    expect(call?.init?.method).toBe('PATCH')
+    expect(params.get('addParents')).toBe('folder-b')
+    expect(params.get('removeParents')).toBe('folder-a')
+    expect(call?.init?.body).toBeUndefined()
+  })
+
+  it('creates a folder inside another, with parents as a list', async () => {
+    const upstream = fakeUpstream([{ match: /files/, body: { id: 'new', name: 'reports' } }])
+    await gdrive.callTool(ctx(upstream), 'create_folder', {
+      name: 'reports',
+      parents: ['folder-a'],
+    })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      name: 'reports',
+      parents: ['folder-a'],
+      mimeType: 'application/vnd.google-apps.folder',
+    })
+  })
+
+  it('deletes a file, and reads Drive empty 204 as an empty result', async () => {
+    const upstream = fakeUpstream([{ match: /files/, status: 204 }])
+    const result = await gdrive.callTool(ctx(upstream), 'delete_file', { file_id: 'f1' })
+    expect(upstream.calls[0]?.init?.method).toBe('DELETE')
+    expect(result.content).toEqual({})
+  })
+
+  it('marks the tidying tools as writes, which is what a read only credential is refused on', () => {
+    const writes = gdrive.listTools().filter((tool) => tool.write)
+    expect(writes.map((tool) => tool.name)).toContain('delete_file')
+    expect(writes.map((tool) => tool.name)).not.toContain('download_file')
+  })
 })

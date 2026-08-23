@@ -150,7 +150,7 @@ agent that silently reasons over half a page is worse than one that errors.
 | `github` | beta | Repository search, issues list, get and create, authenticated user |
 | `gmail` | beta | Profile, message list and get, label |
 | `gcal` | beta | Calendars, event list and get |
-| `gdrive` | beta | About, file list, get, download and export |
+| `gdrive` | beta | About, file list, get, download and export, plus create, rename, move, copy, share, trash and delete |
 | `discord` | beta | Bot user, guilds, channels, message list and post |
 | `facebook` | beta | Authenticated user |
 | `x` | experimental | User, post list and get, recent search, create post |
@@ -166,6 +166,8 @@ cheaper than finding out later.
 A provider whose client id is blank is left out of the registry entirely, so a
 deployment serves what it has credentials for and nothing else. `gmail`, `gcal`
 and `gdrive` share one Google grant, so one consent screen covers all three.
+`gdrive` asks for full Drive access, so an existing Google connection made
+before that has to reconnect once before its write tools work.
 
 If you want a provider that is not here, the adapter contract is small and the
 conformance suite tells you when you are done. See

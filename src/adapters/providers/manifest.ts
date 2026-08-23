@@ -363,6 +363,14 @@ function buildRequest(
   }
 }
 
+/** Not res.json(): a 204 carries no body at all, which json() reads as a
+ *  syntax error. Drive answers a delete that way. */
+async function readOk(tool: ToolManifest, res: Response): Promise<unknown> {
+  if (tool.binary) return undefined
+  const text = await res.text()
+  return text ? JSON.parse(text) : {}
+}
+
 async function binaryResult(fail: Fail, prefix: string, res: Response): Promise<ToolResult> {
   const tooBig = (size: number) =>
     fail(
@@ -408,9 +416,7 @@ async function readResponse(
   // that says why, and a Response body cannot be read twice.
   const failureText = res.ok ? undefined : await res.text().catch(() => '')
   const body = res.ok
-    ? tool.binary
-      ? undefined
-      : await res.json()
+    ? await readOk(tool, res)
     : ((): unknown => {
         try {
           return JSON.parse(failureText ?? '')

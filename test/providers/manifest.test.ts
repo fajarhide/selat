@@ -197,6 +197,23 @@ describe('manifest executor: requests', () => {
     )
   })
 
+  it('takes an empty 204 as an empty result, not a parse failure', async () => {
+    // A delete answers 204 with no body at all, which res.json() reads as a
+    // syntax error and reports as an upstream failure.
+    const remover = withTools([
+      {
+        name: 'delete_thing',
+        description: 'Delete one thing',
+        write: true,
+        request: 'DELETE /things/{id}',
+        args: { id: { type: 'string', required: true } },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /things/, status: 204 }])
+    const result = await remover.callTool(ctx(upstream), 'delete_thing', { id: 't1' })
+    expect(result.content).toEqual({})
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
