@@ -6,6 +6,9 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ### Added
 
+- `GET /v1/catalog`, unauthenticated, reporting what this deployment booted with
+  the tool names it serves, so a site rendering a page per provider does not
+  keep its own copy of the truth (#62).
 - `upload_file` and `replace_file_content` take a file the gateway already
   holds, so a download and an upload join without either set of bytes reaching
   the conversation. Copying a large attachment between two vendors now costs

@@ -275,6 +275,7 @@ a public issue.
 | `DELETE /v1/connections/{provider}` | Disconnect and drop the tokens |
 | `GET /v1/whoami` | Workspace, plan, connected providers. No secrets |
 | `GET /v1/health`, `GET /v1/ready` | Liveness and readiness |
+| `GET /v1/catalog` | What this deployment booted, with tool names. No credential, no workspace |
 
 ## Deploying it yourself
 

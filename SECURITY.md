@@ -50,6 +50,11 @@ closed with a link rather than an advisory.
 - **A large download is stored for 24 hours** so the bytes stay out of a model.
   Scoped to the workspace and deleted with it, and described in the
   [privacy policy](https://selat.weekndlabs.com/privacy).
+- **`GET /v1/catalog` needs no credential**, so a self-hosted instance
+  advertises which OAuth applications it has configured and the tool names that
+  follow from them. That is the point for a hosted gateway and a small
+  disclosure for a private one. It carries no workspace, no connected account
+  and no scope.
 - **Providers below `ga` can change behaviour.** Nothing is `ga` yet, and the
   catalog says so per tool.
 
