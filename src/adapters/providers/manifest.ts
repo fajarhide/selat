@@ -27,7 +27,7 @@ export type AuthScheme =
     }
 
 export type ArgDef = {
-  type: 'string' | 'number' | 'boolean' | 'string[]'
+  type: 'string' | 'number' | 'boolean' | 'string[]' | 'base64'
   description?: string
   required?: boolean
   enum?: string[]
@@ -97,6 +97,10 @@ export type ToolManifest = {
   items?: string
   /** Dotted paths kept in the result. Absent returns the response whole. */
   fields?: string[]
+  /** The request carries bytes. The named arguments are pulled out of the
+   *  JSON body and sent as a multipart/related upload instead, which is how
+   *  one call can carry a file's metadata and its contents together. */
+  upload?: { content: string; mimeType: string }
   /** The response carries bytes, not JSON. The result is {mime_type, size,
    *  data} with data base64, and fields and pagination do not apply. Drive
    *  answers files.get?alt=media and files.export this way. */
@@ -163,7 +167,7 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
           ...manifest.headers,
           ...authHeader(manifest.auth, secret),
           'x-request-id': ctx.requestId,
-          ...(request.init.body ? { 'content-type': 'application/json' } : {}),
+          ...(request.contentType ? { 'content-type': request.contentType } : {}),
         },
       })
 
@@ -216,7 +220,9 @@ function toolDef(tool: ToolManifest): ToolDef {
   const required: string[] = []
   for (const [name, def] of Object.entries(tool.args)) {
     const shape =
-      def.type === 'string[]' ? { type: 'array', items: { type: 'string' } } : { type: def.type }
+      def.type === 'string[]'
+        ? { type: 'array', items: { type: 'string' } }
+        : { type: def.type === 'base64' ? 'string' : def.type }
     properties[name] = {
       ...shape,
       ...(def.description ? { description: def.description } : {}),
@@ -274,6 +280,17 @@ function validate(fail: Fail, tool: ToolManifest, rawArgs: unknown): Record<stri
       return text
     }
 
+    if (def.type === 'base64') {
+      const text = String(value).replace(/\s/g, '')
+      // Buffer.from ignores anything outside the alphabet rather than failing,
+      // so a mistyped payload would upload as silent garbage without this.
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(text)) {
+        throw fail('invalid_arguments', `${name} must be base64`)
+      }
+      out[name] = text
+      continue
+    }
+
     // A bare value is taken as a one-element list, because an agent handed one
     // label writes "bug" about as often as ["bug"].
     if (def.type === 'string[]') {
@@ -313,7 +330,7 @@ function buildRequest(
   args: Record<string, unknown>,
   paging: Pagination | undefined,
   cursor: string | number | undefined,
-): { url: string; init: RequestInit } {
+): { url: string; init: RequestInit; contentType?: string } {
   const space = tool.request.indexOf(' ')
   const method = tool.request.slice(0, space) as Method
   const template = tool.request.slice(space + 1)
@@ -338,6 +355,7 @@ function buildRequest(
 
   for (const [name, def] of Object.entries(tool.args)) {
     if (inPath.has(name)) continue
+    if (name === tool.upload?.content || name === tool.upload?.mimeType) continue
     const value = args[name]
     if (value === undefined) continue
     put(def.param ?? name, value, def.in)
@@ -355,11 +373,31 @@ function buildRequest(
   }
 
   const search = query.toString()
-  const hasBody = Object.keys(body).length > 0
+  const url = `${manifest.baseUrl}${path}${search ? `?${search}` : ''}`
 
+  if (tool.upload) {
+    const media = Buffer.from(String(args[tool.upload.content] ?? ''), 'base64')
+    const type = String(args[tool.upload.mimeType] ?? 'application/octet-stream')
+    // multipart/related is Drive's own upload shape: the metadata first as
+    // JSON, the bytes second under their own media type. A vendor that wants
+    // something else will need a second mode here.
+    const boundary = `selat-${crypto.randomUUID()}`
+    const head = Buffer.from(
+      `--${boundary}\r\ncontent-type: application/json\r\n\r\n${JSON.stringify(body)}\r\n` +
+        `--${boundary}\r\ncontent-type: ${type}\r\n\r\n`,
+    )
+    return {
+      url,
+      init: { method, body: Buffer.concat([head, media, Buffer.from(`\r\n--${boundary}--`)]) },
+      contentType: `multipart/related; boundary=${boundary}`,
+    }
+  }
+
+  const hasBody = Object.keys(body).length > 0
   return {
-    url: `${manifest.baseUrl}${path}${search ? `?${search}` : ''}`,
+    url,
     init: { method, ...(hasBody ? { body: JSON.stringify(body) } : {}) },
+    ...(hasBody ? { contentType: 'application/json' } : {}),
   }
 }
 

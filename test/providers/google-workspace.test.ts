@@ -178,6 +178,39 @@ describe('google drive', () => {
     expect(result.content).toEqual({})
   })
 
+  it('uploads a file with its name, folder and contents in one call', async () => {
+    const upstream = fakeUpstream([{ match: /upload/, body: { id: 'new', name: 'notes.txt' } }])
+    await gdrive.callTool(ctx(upstream), 'upload_file', {
+      name: 'notes.txt',
+      content: Buffer.from('hello drive').toString('base64'),
+      mime_type: 'text/plain',
+      parents: ['folder-a'],
+    })
+    const call = upstream.calls[0]
+    const url = new URL(call?.url ?? '')
+    expect(url.pathname).toBe('/upload/drive/v3/files')
+    expect(url.searchParams.get('uploadType')).toBe('multipart')
+
+    const sent = Buffer.from(call?.init?.body as Uint8Array).toString()
+    expect(sent).toContain('{"name":"notes.txt","parents":["folder-a"]}')
+    expect(sent).toContain('hello drive')
+  })
+
+  it('replaces the contents of a file without touching its metadata', async () => {
+    const upstream = fakeUpstream([{ match: /upload/, body: { id: 'f1' } }])
+    await gdrive.callTool(ctx(upstream), 'replace_file_content', {
+      file_id: 'f1',
+      content: Buffer.from('new text').toString('base64'),
+      mime_type: 'text/plain',
+    })
+    const call = upstream.calls[0]
+    expect(call?.init?.method).toBe('PATCH')
+    expect(new URL(call?.url ?? '').pathname).toBe('/upload/drive/v3/files/f1')
+    const sent = Buffer.from(call?.init?.body as Uint8Array).toString()
+    expect(sent).toContain('{}')
+    expect(sent).toContain('new text')
+  })
+
   it('marks the tidying tools as writes, which is what a read only credential is refused on', () => {
     const writes = gdrive.listTools().filter((tool) => tool.write)
     expect(writes.map((tool) => tool.name)).toContain('delete_file')
