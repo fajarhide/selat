@@ -5,6 +5,7 @@ import type { ProviderAdapter } from './registry.ts'
 // names the fields it wants. Declaring it as an argument with a default is how
 // a manifest sends a fixed query parameter today, and it leaves an agent able
 // to widen the selection when it genuinely needs more.
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const FILE_FIELDS = 'id,name,mimeType,modifiedTime,size,webViewLink,owners(emailAddress)'
 
 export const gdriveManifest: ProviderManifest = {
@@ -13,7 +14,9 @@ export const gdriveManifest: ProviderManifest = {
   grantId: 'google',
   maturity: 'beta',
   baseUrl: 'https://www.googleapis.com',
-  scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  // Widened from drive.readonly in one step rather than per tool, because
+  // every existing Google connection re-consents once either way.
+  scopes: ['https://www.googleapis.com/auth/drive'],
   auth: { type: 'bearer' },
   errors: { forbidden: 'upstream_error' },
   pagination: {
@@ -80,6 +83,96 @@ export const gdriveManifest: ProviderManifest = {
         },
       },
       fields: ['id', 'name', 'mimeType', 'modifiedTime', 'size', 'webViewLink', 'owners'],
+    },
+    {
+      name: 'create_folder',
+      description: 'Create a folder, optionally inside another one',
+      write: true,
+      request: 'POST /drive/v3/files',
+      args: {
+        name: { type: 'string', required: true },
+        parents: {
+          type: 'string[]',
+          description: 'Folder ids to create it in. Omitted, it lands in My Drive',
+        },
+        mime_type: {
+          type: 'string',
+          description: 'Leave as the folder type',
+          default: FOLDER_MIME,
+          param: 'mimeType',
+        },
+      },
+      fields: ['id', 'name', 'mimeType'],
+    },
+    {
+      name: 'rename_file',
+      description: 'Rename one file or folder',
+      write: true,
+      request: 'PATCH /drive/v3/files/{file_id}',
+      args: {
+        file_id: { type: 'string', required: true },
+        name: { type: 'string', required: true },
+      },
+      fields: ['id', 'name'],
+    },
+    {
+      name: 'move_file',
+      description: 'Move a file between folders. Give remove_parents its current folder, or the file gains a second one instead of moving',
+      write: true,
+      request: 'PATCH /drive/v3/files/{file_id}',
+      args: {
+        file_id: { type: 'string', required: true },
+        add_parents: { type: 'string[]', required: true, in: 'query', param: 'addParents' },
+        remove_parents: { type: 'string[]', in: 'query', param: 'removeParents' },
+      },
+      fields: ['id', 'name'],
+    },
+    {
+      name: 'copy_file',
+      description: 'Copy one file, optionally under a new name or into another folder',
+      write: true,
+      request: 'POST /drive/v3/files/{file_id}/copy',
+      args: {
+        file_id: { type: 'string', required: true },
+        name: { type: 'string', description: 'Name for the copy. Drive picks one otherwise' },
+        parents: { type: 'string[]', description: 'Folder ids to put the copy in' },
+      },
+      fields: ['id', 'name', 'mimeType'],
+    },
+    {
+      name: 'trash_file',
+      description: 'Move a file to the trash, or restore one by setting trashed to false',
+      write: true,
+      request: 'PATCH /drive/v3/files/{file_id}',
+      args: {
+        file_id: { type: 'string', required: true },
+        trashed: { type: 'boolean', default: true },
+      },
+      fields: ['id', 'name', 'trashed'],
+    },
+    {
+      name: 'delete_file',
+      description: 'Delete a file for good, skipping the trash. Prefer trash_file, which can be undone',
+      write: true,
+      request: 'DELETE /drive/v3/files/{file_id}',
+      args: { file_id: { type: 'string', required: true } },
+    },
+    {
+      name: 'share_file',
+      description: 'Give somebody access to a file. type anyone makes it reachable by link',
+      write: true,
+      request: 'POST /drive/v3/files/{file_id}/permissions',
+      args: {
+        file_id: { type: 'string', required: true },
+        role: { type: 'string', required: true, enum: ['reader', 'commenter', 'writer'] },
+        type: { type: 'string', enum: ['user', 'group', 'domain', 'anyone'], default: 'user' },
+        email_address: {
+          type: 'string',
+          description: 'Required for type user or group',
+          param: 'emailAddress',
+        },
+      },
+      fields: ['id', 'role', 'type'],
     },
     {
       name: 'download_file',
