@@ -97,6 +97,10 @@ export type ToolManifest = {
   items?: string
   /** Dotted paths kept in the result. Absent returns the response whole. */
   fields?: string[]
+  /** The response carries bytes, not JSON. The result is {mime_type, size,
+   *  data} with data base64, and fields and pagination do not apply. Drive
+   *  answers files.get?alt=media and files.export this way. */
+  binary?: boolean
 }
 
 export type ProviderManifest = {
@@ -117,6 +121,10 @@ export type ProviderManifest = {
 }
 
 const PLACEHOLDER = /\{(\w+)\}/g
+/** Base64 costs four bytes for every three, and an MCP client puts the block
+ *  straight into a context window, so this caps the reply rather than the file.
+ *  ponytail: one number for every provider, split per tool if one earns it. */
+const MAX_BINARY_BYTES = 5 * 1024 * 1024
 const CURSOR_DESCRIPTION = 'Opaque cursor from a previous page'
 const DEFAULT_RETRY_AFTER = 60
 
@@ -355,6 +363,34 @@ function buildRequest(
   }
 }
 
+async function binaryResult(fail: Fail, prefix: string, res: Response): Promise<ToolResult> {
+  const tooBig = (size: number) =>
+    fail(
+      'invalid_arguments',
+      `${prefix} returned ${size} bytes, over the ${MAX_BINARY_BYTES} this gateway will carry. ` +
+        'Export a smaller format, or open the file by its link instead.',
+    )
+
+  // Checked before the body is pulled, so a large file is refused without
+  // being held in memory first. Not every upstream declares it.
+  const declared = Number(res.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_BINARY_BYTES) throw tooBig(declared)
+
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.length > MAX_BINARY_BYTES) throw tooBig(bytes.length)
+
+  return {
+    content: {
+      mime_type: (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0],
+      size: bytes.length,
+      data: bytes.toString('base64'),
+    },
+    binary: true,
+    nextCursor: null,
+    hasMore: false,
+  }
+}
+
 async function readResponse(
   manifest: ProviderManifest,
   tool: ToolManifest,
@@ -372,7 +408,9 @@ async function readResponse(
   // that says why, and a Response body cannot be read twice.
   const failureText = res.ok ? undefined : await res.text().catch(() => '')
   const body = res.ok
-    ? await res.json()
+    ? tool.binary
+      ? undefined
+      : await res.json()
     : ((): unknown => {
         try {
           return JSON.parse(failureText ?? '')
@@ -431,6 +469,8 @@ async function readResponse(
         : `${manifest.prefix} returned ${res.status}`,
     )
   }
+
+  if (tool.binary) return binaryResult(fail, manifest.prefix, res)
 
   if (!paging || !tool.items) {
     return { content: project(body, tool.fields), nextCursor: null, hasMore: false }

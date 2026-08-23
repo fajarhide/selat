@@ -69,11 +69,15 @@ export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
                 args: request.params.arguments ?? {},
                 requestId,
               })
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result.content) }],
-          structuredContent: asStructured(result.content),
-          ...(result.hasMore ? { _meta: { nextCursor: result.nextCursor } } : {}),
-        }
+        // Structured content is skipped for bytes on purpose: it would carry
+        // a second copy of the base64 into the same context window.
+        return result.binary
+          ? { content: [binaryBlock(request.params.name, result.content as BinaryContent)] }
+          : {
+              content: [{ type: 'text' as const, text: JSON.stringify(result.content) }],
+              structuredContent: asStructured(result.content),
+              ...(result.hasMore ? { _meta: { nextCursor: result.nextCursor } } : {}),
+            }
       } catch (err) {
         // MCP wants a tool failure as an error result, not a transport error,
         // so the model can read the stable code and react.
@@ -102,6 +106,21 @@ export function mcpRoutes(deps: CallDeps, pool: Pool): Router {
   })
 
   return router
+}
+
+export type BinaryContent = { mime_type: string; size: number; data: string }
+
+/** Text is handed over as text, because an agent asked to read a document can
+ *  do nothing with base64. An image goes in the block a client can render.
+ *  Everything else travels as a resource, the only block that carries
+ *  arbitrary bytes. */
+export function binaryBlock(tool: string, content: BinaryContent) {
+  const { mime_type: mimeType, data } = content
+  if (mimeType.startsWith('image/')) return { type: 'image' as const, data, mimeType }
+  if (mimeType.startsWith('text/') || mimeType === 'application/json') {
+    return { type: 'text' as const, text: Buffer.from(data, 'base64').toString('utf8') }
+  }
+  return { type: 'resource' as const, resource: { uri: `selat://${tool}`, mimeType, blob: data } }
 }
 
 function asStructured(content: unknown): Record<string, unknown> | undefined {

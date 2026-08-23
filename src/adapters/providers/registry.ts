@@ -26,6 +26,9 @@ export type AdapterContext = {
 
 export type ToolResult = {
   content: unknown
+  /** content is {mime_type, size, data} with data base64, so a surface can
+   *  hand back the bytes instead of a JSON string of them. */
+  binary?: boolean
   nextCursor?: string | null
   hasMore?: boolean
   resultTruncated?: boolean

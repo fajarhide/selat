@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { closeTestServers, startTestServer } from './helpers/server.ts'
 import { testPool } from './helpers/db.ts'
 import { json } from './helpers/http.ts'
+import { binaryBlock } from '../src/interface/http/mcp.ts'
 
 afterAll(async () => {
   await closeTestServers()
@@ -107,5 +108,41 @@ describe('mcp surface', () => {
     })
     const listed = payload((await rpc(base, token, 'tools/list')).text).result.tools
     expect(listed).toEqual([])
+  })
+})
+
+describe('mcp binary content blocks', () => {
+  const of = (mime: string, text: string) => ({
+    mime_type: mime,
+    size: text.length,
+    data: Buffer.from(text).toString('base64'),
+  })
+
+  it('hands text back as text, so a document is readable without decoding', () => {
+    expect(binaryBlock('gdrive__export_file', of('text/plain', 'the doc'))).toEqual({
+      type: 'text',
+      text: 'the doc',
+    })
+  })
+
+  it('puts an image in the block a client can render', () => {
+    const content = of('image/png', 'PNG')
+    expect(binaryBlock('gdrive__download_file', content)).toEqual({
+      type: 'image',
+      data: content.data,
+      mimeType: 'image/png',
+    })
+  })
+
+  it('carries anything else as a resource, which is the block that takes bytes', () => {
+    const content = of('application/pdf', '%PDF')
+    expect(binaryBlock('gdrive__download_file', content)).toEqual({
+      type: 'resource',
+      resource: {
+        uri: 'selat://gdrive__download_file',
+        mimeType: 'application/pdf',
+        blob: content.data,
+      },
+    })
   })
 })

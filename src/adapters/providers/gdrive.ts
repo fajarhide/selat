@@ -81,6 +81,39 @@ export const gdriveManifest: ProviderManifest = {
       },
       fields: ['id', 'name', 'mimeType', 'modifiedTime', 'size', 'webViewLink', 'owners'],
     },
+    {
+      name: 'download_file',
+      description:
+        'Download the bytes of one file. Google Docs, Sheets and Slides have no bytes of their own, so use export_file for those',
+      write: false,
+      request: 'GET /drive/v3/files/{file_id}',
+      binary: true,
+      args: {
+        file_id: { type: 'string', required: true },
+        alt: {
+          type: 'string',
+          description: 'Response format. media returns the file itself',
+          default: 'media',
+        },
+      },
+    },
+    {
+      name: 'export_file',
+      description:
+        'Export a Google Doc, Sheet or Slide as a format that has bytes, such as text/plain or application/pdf',
+      write: false,
+      request: 'GET /drive/v3/files/{file_id}/export',
+      binary: true,
+      args: {
+        file_id: { type: 'string', required: true },
+        mime_type: {
+          type: 'string',
+          required: true,
+          description: 'For example text/plain, text/markdown, text/csv or application/pdf',
+          param: 'mimeType',
+        },
+      },
+    },
   ],
 }
 
