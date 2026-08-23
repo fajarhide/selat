@@ -24,8 +24,11 @@ Apache-2.0 either way.
 ## One command to a real tool call
 
 ```sh
-npx selat
+npx @fajarhide/selat
 ```
+
+The package is scoped because npm refuses `selat` as too close to existing
+names. Installed globally the command is still `selat`.
 
 No database, no config file, no Docker. With no `DATABASE_URL` set, Selat runs
 Postgres in-process (PGlite, the real thing compiled to WASM) and keeps its

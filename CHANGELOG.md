@@ -10,7 +10,7 @@ earlier than npm does.
 
 ### Added
 
-- `npx selat`. With no `DATABASE_URL`, Selat runs Postgres in-process through
+- `npx @fajarhide/selat`. With no `DATABASE_URL`, Selat runs Postgres in-process through
   PGlite and keeps its state in `~/.selat`, so trying it costs no database to
   install. The first run provisions a workspace and a credential, because
   without a service token the admin plane is not mounted and there would be no

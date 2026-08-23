@@ -60,8 +60,11 @@ jobs:
       - name: the packed tarball can actually run
         run: |
           npm pack
-          tar -tzf selat-*.tgz | grep -q 'package/dist/src/main.js'
-          tar -tzf selat-*.tgz | grep -q 'package/migrations/001_workspaces.sql'
+          # A scope changes the filename to fajarhide-selat-*.tgz, so this
+          # matches on the extension rather than on the package name.
+          tarball="$(ls ./*.tgz)"
+          tar -tzf "$tarball" | grep -q 'package/dist/src/main.js'
+          tar -tzf "$tarball" | grep -q 'package/migrations/001_workspaces.sql'
 
       - name: publish to npm
         if: ${{ env.NPM_TOKEN != '' }}
