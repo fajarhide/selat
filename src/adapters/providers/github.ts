@@ -84,6 +84,8 @@ export const githubManifest: ProviderManifest = {
         repo: { type: 'string', required: true },
         title: { type: 'string', required: true },
         body: { type: 'string' },
+        labels: { type: 'string[]', description: 'Label names to apply' },
+        assignees: { type: 'string[]', description: 'GitHub logins to assign' },
       },
       fields: ['number', 'title', 'state', 'html_url'],
     },

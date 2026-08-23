@@ -89,6 +89,72 @@ describe('manifest executor: requests', () => {
     expect((call?.init?.headers as Record<string, string>)['content-type']).toBe('application/json')
   })
 
+  it('puts an argument in the query string on a PATCH when the manifest asks for it', async () => {
+    // Drive moves a file with addParents in the query of a PATCH, so the
+    // method alone cannot decide where an argument goes.
+    const mover = withTools([
+      {
+        name: 'move_thing',
+        description: 'Move one thing',
+        write: true,
+        request: 'PATCH /things/{id}',
+        args: {
+          id: { type: 'string', required: true },
+          to: { type: 'string', in: 'query', param: 'addParents' },
+          name: { type: 'string' },
+        },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /things/, body: { id: 't1' } }])
+    await mover.callTool(ctx(upstream), 'move_thing', { id: 't1', to: 'box-b', name: 'renamed' })
+    const call = upstream.calls[0]
+    expect(call?.url).toContain('addParents=box-b')
+    expect(JSON.parse(String(call?.init?.body))).toEqual({ name: 'renamed' })
+  })
+
+  it('sends a string[] whole in a body, joined in a query, and accepts a bare value', async () => {
+    const tagger = withTools([
+      {
+        name: 'tag_thing',
+        description: 'Tag one thing',
+        write: true,
+        request: 'POST /things/{id}/tags',
+        args: {
+          id: { type: 'string', required: true },
+          tags: { type: 'string[]' },
+          parents: { type: 'string[]', in: 'query' },
+        },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /things/, body: { id: 't1' } }])
+    await tagger.callTool(ctx(upstream), 'tag_thing', {
+      id: 't1',
+      tags: ['bug', 'urgent'],
+      parents: ['box-a', 'box-b'],
+    })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ tags: ['bug', 'urgent'] })
+    expect(upstream.calls[0]?.url).toContain('parents=box-a%2Cbox-b')
+
+    await tagger.callTool(ctx(upstream), 'tag_thing', { id: 't1', tags: 'bug' })
+    expect(JSON.parse(String(upstream.calls[1]?.init?.body))).toEqual({ tags: ['bug'] })
+  })
+
+  it('declares a string[] as an array of strings in the input schema', () => {
+    const tagger = withTools([
+      {
+        name: 'tag_thing',
+        description: 'Tag one thing',
+        write: true,
+        request: 'POST /things',
+        args: { tags: { type: 'string[]', description: 'Tag names' } },
+      },
+    ])
+    const schema = tagger.listTools()[0]?.inputSchema as { properties: Record<string, unknown> }
+    expect(schema.properties).toEqual({
+      tags: { type: 'array', items: { type: 'string' }, description: 'Tag names' },
+    })
+  })
+
   it('merges manifest headers under the ones the executor owns', async () => {
     // A manifest that tries to set authorization must lose to the real
     // credential, or a provider file becomes a way to send someone else's.
