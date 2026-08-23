@@ -22,6 +22,9 @@ export type AdapterContext = {
   requestId: string
   accessToken: string | null
   fetch: typeof fetch
+  /** Reading a file id the caller passed is part of building the request, so
+   *  it belongs here beside fetch. Absent, a tool that takes one says so. */
+  readFile?: (workspaceId: string, id: string) => Promise<{ mimeType: string; bytes: Buffer } | null>
 }
 
 export type ToolResult = {

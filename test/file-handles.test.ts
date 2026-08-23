@@ -123,3 +123,110 @@ describe('large downloads become a file handle', () => {
     await pool.end()
   })
 })
+
+describe('an upload can name a file the gateway already holds', () => {
+  function uploader() {
+    const upstream = fakeUpstream([{ match: /upload/, body: { id: 'new', name: 'copy.txt' } }])
+    const adapter = manifestProvider({
+      id: 'demo',
+      prefix: 'demo',
+      maturity: 'experimental',
+      baseUrl: 'https://api.demo.test',
+      scopes: [],
+      auth: { type: 'bearer' },
+      tools: [
+        {
+          name: 'put',
+          description: 'Upload one thing',
+          write: true,
+          request: 'POST /upload/things',
+          upload: { content: 'content', mimeType: 'mime_type', fileId: 'from_file' },
+          args: {
+            name: { type: 'string', required: true },
+            content: { type: 'base64' },
+            from_file: { type: 'string' },
+            mime_type: { type: 'string' },
+          },
+        },
+      ],
+    })
+    return { upstream, adapter }
+  }
+
+  function withStore(adapter: ReturnType<typeof manifestProvider>, files: FileStore): CallDeps {
+    return {
+      registry: createRegistry([adapter]),
+      enablement: {
+        async enabledPrefixes() { return ['demo'] },
+        async disabledTools() { return new Set<string>() },
+        async enable() {},
+        async disable() {},
+        async setToolOverride() {},
+      },
+      grants: { async accessTokenFor() { return 'token' } },
+      idempotency: { async get() { return null }, async put() {} },
+      files,
+    }
+  }
+
+  it('sends the stored bytes and its media type, without the caller holding either', async () => {
+    const pool = createEmbeddedPool()
+    await runMigrations(pool)
+    const files = fileStore(pool)
+    const { rows } = await pool.query<{ id: string }>(
+      "INSERT INTO workspaces (name) VALUES ('a') RETURNING id",
+    )
+    const workspaceId = rows[0]!.id
+    const stored = await files.put(workspaceId, 'application/pdf', Buffer.from('%PDF-1.7 body'))
+
+    const { upstream, adapter } = uploader()
+    const wrapped = {
+      ...adapter,
+      callTool: (c: Parameters<typeof adapter.callTool>[0], n: string, a: unknown) =>
+        adapter.callTool({ ...c, fetch: upstream.fetch }, n, a),
+    }
+    await callTool(withStore(wrapped, files), {
+      ...call,
+      workspaceId,
+      name: 'demo__put',
+      args: { name: 'copy.txt', from_file: stored },
+    })
+
+    const sent = Buffer.from(upstream.calls[0]?.init?.body as Uint8Array).toString()
+    expect(sent).toContain('%PDF-1.7 body')
+    expect(sent).toContain('content-type: application/pdf')
+    // The id named a file; it is not a field the upstream ever sees.
+    expect(sent).not.toContain('from_file')
+    await pool.end()
+  })
+
+  it('refuses a file id from another workspace, and one that is neither given', async () => {
+    const pool = createEmbeddedPool()
+    await runMigrations(pool)
+    const files = fileStore(pool)
+    const made = await pool.query<{ id: string }>(
+      "INSERT INTO workspaces (name) VALUES ('a'), ('b') RETURNING id",
+    )
+    const [a, b] = made.rows.map((row) => row.id)
+    const stored = await files.put(a!, 'text/plain', Buffer.from('theirs'))
+
+    const { upstream, adapter } = uploader()
+    const wrapped = {
+      ...adapter,
+      callTool: (c: Parameters<typeof adapter.callTool>[0], n: string, x: unknown) =>
+        adapter.callTool({ ...c, fetch: upstream.fetch }, n, x),
+    }
+    const deps = withStore(wrapped, files)
+
+    await expect(
+      callTool(deps, { ...call, workspaceId: b!, name: 'demo__put', args: { name: 'c', from_file: stored } }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+
+    await expect(
+      callTool(deps, { ...call, workspaceId: a!, name: 'demo__put', args: { name: 'c' } }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+
+    expect(upstream.calls).toHaveLength(0)
+    await pool.end()
+  })
+})

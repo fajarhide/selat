@@ -232,15 +232,22 @@ export const gdriveManifest: ProviderManifest = {
         'Upload a new file with its contents. The whole call is capped near 750 KB of file, so hand it text and small documents rather than media',
       write: true,
       request: 'POST /upload/drive/v3/files',
-      upload: { content: 'content', mimeType: 'mime_type' },
+      upload: { content: 'content', mimeType: 'mime_type', fileId: 'file_id' },
       selector: 'response_fields',
       args: {
         name: { type: 'string', required: true },
-        content: { type: 'base64', required: true, description: 'The file bytes, base64 encoded' },
+        content: {
+          type: 'base64',
+          description: 'The file bytes, base64 encoded. Give this or file_id, not both',
+        },
+        file_id: {
+          type: 'string',
+          description:
+            'A file this gateway already holds, from an earlier download or export. Uploading it costs no bytes in the conversation',
+        },
         mime_type: {
           type: 'string',
-          required: true,
-          description: 'Media type of the bytes, for example text/plain or application/pdf',
+          description: 'Media type of the bytes. Taken from the stored file when file_id is used',
         },
         parents: { type: 'string[]', description: 'Folder ids to put it in' },
         upload_type: {
@@ -265,12 +272,19 @@ export const gdriveManifest: ProviderManifest = {
       description: 'Replace what is inside an existing file, keeping its id, name and folder',
       write: true,
       request: 'PATCH /upload/drive/v3/files/{file_id}',
-      upload: { content: 'content', mimeType: 'mime_type' },
+      upload: { content: 'content', mimeType: 'mime_type', fileId: 'source_file_id' },
       selector: 'response_fields',
       args: {
         file_id: { type: 'string', required: true },
-        content: { type: 'base64', required: true, description: 'The new bytes, base64 encoded' },
-        mime_type: { type: 'string', required: true, description: 'Media type of the new bytes' },
+        content: {
+          type: 'base64',
+          description: 'The new bytes, base64 encoded. Give this or source_file_id, not both',
+        },
+        source_file_id: {
+          type: 'string',
+          description: 'A file this gateway already holds, used as the new contents',
+        },
+        mime_type: { type: 'string', description: 'Media type of the new bytes' },
         upload_type: {
           type: 'string',
           description: 'Leave as multipart',

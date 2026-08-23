@@ -6,9 +6,22 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ### Added
 
+- `upload_file` and `replace_file_content` take a file the gateway already
+  holds, so a download and an upload join without either set of bytes reaching
+  the conversation. Copying a large attachment between two vendors now costs
+  two tool calls and no payload (#56).
+
 - `SECURITY.md`, naming what is worth attacking in a gateway that holds other
   people's credentials, and which behaviours are known and deliberate so a
   report about one gets a link rather than an advisory (#58).
+
+### Fixed
+
+- A redirect to another origin no longer carries the credential. `fetch`
+  followed redirects by default, so a 302 took the `Authorization` header
+  wherever an upstream pointed, and an `api_key` provider its named header.
+  Cross-origin redirects are still followed, because a Drive download answers
+  with one (#57).
 
 ### Changed
 
