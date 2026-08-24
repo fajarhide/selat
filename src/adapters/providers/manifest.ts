@@ -203,14 +203,25 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
             } catch {
               throw fail('upstream_error', `${manifest.prefix} validation request failed`)
             }
-            if (!res.ok) {
-              const code = res.status === 401 || res.status === 403 ? 'invalid_credential' : 'upstream_error'
-              const message =
-                code === 'invalid_credential'
-                  ? `${manifest.prefix} refused the api key`
-                  : `${manifest.prefix} validation request failed`
-              throw fail(code, message)
+            // invalid_arguments, not reauth_required: the key being refused
+            // arrived in this request, so it is a bad argument rather than a
+            // stored credential that went stale.
+            if (res.status === 401) {
+              throw fail('invalid_arguments', `${manifest.prefix} refused the api key`)
             }
+            if (res.status === 403) {
+              // A bare 403 does not mean a bad key for every vendor, which is
+              // the whole reason errors.forbidden exists.
+              throw fail(
+                manifest.errors?.forbidden ?? 'invalid_arguments',
+                `${manifest.prefix} refused the api key`,
+              )
+            }
+            if (!res.ok) {
+              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+            }
+            // Nothing reads this body, and an unread one holds the socket.
+            await res.body?.cancel()
           },
         }
       : {}),
