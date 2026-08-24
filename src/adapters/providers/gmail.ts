@@ -18,7 +18,20 @@ export const gmailManifest: ProviderManifest = {
   // Google answers 401 when the credential is bad. A 403 is something else,
   // most often an API that was never enabled on the project, and telling
   // someone to reconnect a healthy grant sends them the wrong way.
-  errors: { forbidden: 'upstream_error' },
+  errors: {
+    forbidden: 'upstream_error',
+    // Google spends 403 on two unrelated things: a scope this grant never got,
+    // and an API that was never enabled. Only the first is fixed by
+    // reconnecting, and bodyFailure runs ahead of the 403 arm so it can say so.
+    // SERVICE_DISABLED is not in codes, so it keeps falling through to
+    // upstream_error.
+    bodyFailure: {
+      path: 'error.status',
+      equals: 'PERMISSION_DENIED',
+      codeFrom: 'error.errors.0.reason',
+      codes: { insufficientPermissions: 'reauth_required' },
+    },
+  },
   pagination: {
     style: 'cursor',
     size: 25,

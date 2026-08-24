@@ -71,6 +71,50 @@ describe('one google application, three prefixes', () => {
   })
 })
 
+describe('a google grant that predates a scope widening', () => {
+  // Google's shape for both cases, differing only in reason.
+  const refusal = (reason: string) => ({
+    error: {
+      code: 403,
+      status: 'PERMISSION_DENIED',
+      message: 'refused',
+      errors: [{ domain: 'global', reason, message: 'refused' }],
+    },
+  })
+
+  it('tells a caller to reconnect when the grant is missing the scope', async () => {
+    for (const provider of [gmailProvider(), gcal, gdrive]) {
+      const upstream = fakeUpstream([
+        { match: /./, status: 403, body: refusal('insufficientPermissions') },
+      ])
+      const err = await provider
+        .callTool(ctx(upstream), provider.listTools()[0]!.name, {})
+        .catch((e) => e)
+      expect(err.code, provider.prefix).toBe('reauth_required')
+    }
+  })
+
+  it('still refuses to blame the credential when the API was never enabled', async () => {
+    // The case errors.forbidden exists for. Reconnecting cannot fix it, so it
+    // must not come back as reauth_required.
+    for (const provider of [gmailProvider(), gcal, gdrive]) {
+      const upstream = fakeUpstream([{ match: /./, status: 403, body: refusal('SERVICE_DISABLED') }])
+      const err = await provider
+        .callTool(ctx(upstream), provider.listTools()[0]!.name, {})
+        .catch((e) => e)
+      expect(err.code, provider.prefix).toBe('upstream_error')
+    }
+  })
+
+  it('leaves a 401 to the arm that already handles it', async () => {
+    const upstream = fakeUpstream([
+      { match: /./, status: 401, body: { error: { code: 401, status: 'UNAUTHENTICATED' } } },
+    ])
+    const err = await gcal.callTool(ctx(upstream), 'list_calendars', {}).catch((e) => e)
+    expect(err.code).toBe('reauth_required')
+  })
+})
+
 describe('google calendar writes', () => {
   it('nests a start time under start.dateTime from a flat argument', async () => {
     // The manifest reaches into the body with a dotted param, and Calendar
