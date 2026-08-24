@@ -54,7 +54,66 @@ describe('one google application, three prefixes', () => {
 
   it('asks for a different scope per prefix, which is why the union matters', () => {
     const scopes = [gmailProvider(), gcal, gdrive].flatMap((provider) => provider.scopes)
-    expect(new Set(scopes).size).toBe(3)
+    expect(new Set(scopes)).toEqual(
+      new Set([
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/drive',
+      ]),
+    )
+  })
+
+  it('keeps calendar.readonly beside calendar.events, because list_calendars needs it', () => {
+    // calendar.events does not grant calendarList.list, so dropping the
+    // readonly scope would break a tool that works today.
+    expect(gcal.scopes).toContain('https://www.googleapis.com/auth/calendar.readonly')
+  })
+})
+
+describe('google calendar writes', () => {
+  it('nests a start time under start.dateTime from a flat argument', async () => {
+    // The manifest reaches into the body with a dotted param, and Calendar
+    // refuses an event whose start is a bare string.
+    const upstream = fakeUpstream([
+      { match: /events/, body: { id: 'e9', summary: 'Standup', status: 'confirmed' } },
+    ])
+    const result = await gcal.callTool(ctx(upstream), 'create_event', {
+      summary: 'Standup',
+      start_time: '2026-08-25T14:00:00+07:00',
+      end_time: '2026-08-25T14:30:00+07:00',
+    })
+    expect(result.content).toEqual({ id: 'e9', summary: 'Standup', status: 'confirmed' })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      summary: 'Standup',
+      start: { dateTime: '2026-08-25T14:00:00+07:00' },
+      end: { dateTime: '2026-08-25T14:30:00+07:00' },
+    })
+    expect(upstream.calls[0]?.url).toContain('/calendars/primary/events')
+  })
+
+  it('patches only what it was given, so an untouched field keeps its value', async () => {
+    const upstream = fakeUpstream([{ match: /events/, body: { id: 'e9', summary: 'Moved' } }])
+    await gcal.callTool(ctx(upstream), 'update_event', { event_id: 'e9', summary: 'Moved' })
+    expect(upstream.calls[0]?.init?.method).toBe('PATCH')
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ summary: 'Moved' })
+  })
+
+  it('survives the empty body Calendar answers a delete with', async () => {
+    // readOk would throw on JSON.parse('') without its own guard, and a delete
+    // that reports a crash instead of success sends an agent round again.
+    const upstream = fakeUpstream([{ match: /events/, status: 204, raw: '' }])
+    const result = await gcal.callTool(ctx(upstream), 'delete_event', { event_id: 'e9' })
+    expect(result.content).toEqual({})
+    expect(upstream.calls[0]?.init?.method).toBe('DELETE')
+  })
+
+  it('marks every new calendar tool as a write, so a read-only credential loses them', () => {
+    const writes = gcal
+      .listTools()
+      .filter((tool) => tool.write)
+      .map((tool) => tool.name)
+    expect(writes).toEqual(['create_event', 'update_event', 'delete_event'])
   })
 })
 

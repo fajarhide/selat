@@ -27,7 +27,7 @@ export type AuthScheme =
     }
 
 export type ArgDef = {
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'base64'
+  type: 'string' | 'number' | 'boolean' | 'string[]' | 'base64' | 'base64url'
   description?: string
   required?: boolean
   enum?: string[]
@@ -356,7 +356,7 @@ function toolDef(tool: ToolManifest): ToolDef {
     const shape =
       def.type === 'string[]'
         ? { type: 'array', items: { type: 'string' } }
-        : { type: def.type === 'base64' ? 'string' : def.type }
+        : { type: def.type === 'base64' || def.type === 'base64url' ? 'string' : def.type }
     properties[name] = {
       ...shape,
       ...(def.description ? { description: def.description } : {}),
@@ -414,14 +414,22 @@ function validate(fail: Fail, tool: ToolManifest, rawArgs: unknown): Record<stri
       return text
     }
 
-    if (def.type === 'base64') {
+    if (def.type === 'base64' || def.type === 'base64url') {
       const text = String(value).replace(/\s/g, '')
       // Buffer.from ignores anything outside the alphabet rather than failing,
       // so a mistyped payload would upload as silent garbage without this.
-      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(text)) {
+      // One alphabet or the other, never a mix: `a-b+c` is a typo, not base64.
+      const standard = /^[A-Za-z0-9+/]*={0,2}$/.test(text)
+      const urlSafe = /^[A-Za-z0-9_-]*={0,2}$/.test(text)
+      if (!standard && !urlSafe) {
         throw fail('invalid_arguments', `${name} must be base64`)
       }
-      out[name] = text
+      // Gmail wants the url-safe alphabet and a model reaches for the standard
+      // one, so convert rather than let the vendor refuse a correct payload.
+      out[name] =
+        def.type === 'base64url' && standard
+          ? Buffer.from(text, 'base64').toString('base64url')
+          : text
       continue
     }
 

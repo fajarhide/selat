@@ -21,8 +21,12 @@ export function fakeUpstream(routes: Route[]): FakeUpstream {
     calls.push({ url, init })
     const route = routes.find((candidate) => candidate.match.test(url))
     if (!route) return new Response(JSON.stringify({ message: 'no route' }), { status: 404 })
-    return new Response(route.raw ?? JSON.stringify(route.body), {
-      status: route.status ?? 200,
+    const status = route.status ?? 200
+    // A 204 or 304 must be constructed with a null body or Response throws,
+    // and those are the statuses a real delete answers with.
+    const body = status === 204 || status === 304 ? null : (route.raw ?? JSON.stringify(route.body))
+    return new Response(body, {
+      status,
       headers: { 'content-type': 'application/json', ...(route.headers ?? {}) },
     })
   }) as typeof fetch

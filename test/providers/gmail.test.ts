@@ -88,6 +88,50 @@ describe('gmail provider', () => {
     expect(upstream.calls[0]?.url).toContain('format=metadata')
   })
 
+  it('converts a standard base64 raw message to the url-safe alphabet Gmail wants', async () => {
+    // A model reaching for base64 produces + and /, which Gmail refuses in raw.
+    // Converting here is the difference between a sent mail and an opaque 400.
+    const upstream = fakeUpstream([{ match: /messages\/send/, body: { id: 'm9', threadId: 't9' } }])
+    const result = await gmail.callTool(ctx(upstream), 'send_message', { raw: 'YWI+Y2Q/ZQ==' })
+    expect(result.content).toEqual({ id: 'm9', threadId: 't9' })
+    expect(upstream.calls[0]?.init?.method).toBe('POST')
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ raw: 'YWI-Y2Q_ZQ' })
+  })
+
+  it('leaves an already url-safe raw message alone', async () => {
+    const upstream = fakeUpstream([{ match: /messages\/send/, body: { id: 'm9' } }])
+    await gmail.callTool(ctx(upstream), 'send_message', { raw: 'YWI-Y2Q_ZQ' })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ raw: 'YWI-Y2Q_ZQ' })
+  })
+
+  it('refuses a raw message that mixes both alphabets, because that is a typo', async () => {
+    const upstream = fakeUpstream([{ match: /messages\/send/, body: { id: 'm9' } }])
+    await expect(
+      gmail.callTool(ctx(upstream), 'send_message', { raw: 'YWI+Y2Q_ZQ' }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+    expect(upstream.calls).toHaveLength(0)
+  })
+
+  it('sends label changes as arrays in the body, not the query', async () => {
+    const upstream = fakeUpstream([
+      { match: /modify/, body: { id: 'm1', threadId: 't1', labelIds: ['INBOX'] } },
+    ])
+    const result = await gmail.callTool(ctx(upstream), 'modify_message', {
+      id: 'm1',
+      remove_label_ids: 'UNREAD',
+    })
+    expect(result.content).toEqual({ id: 'm1', threadId: 't1', labelIds: ['INBOX'] })
+    // A bare string becomes a one-element list, which is what an agent writes.
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      removeLabelIds: ['UNREAD'],
+    })
+    expect(upstream.calls[0]?.url).not.toContain('removeLabelIds')
+  })
+
+  it('asks for gmail.modify, which is what carries send, modify and trash', () => {
+    expect(gmail.scopes).toEqual(['https://www.googleapis.com/auth/gmail.modify'])
+  })
+
   it('reads the unread count off a label', async () => {
     const upstream = fakeUpstream([
       {

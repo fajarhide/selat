@@ -9,7 +9,11 @@ export const gmailManifest: ProviderManifest = {
   grantId: 'google',
   maturity: 'beta',
   baseUrl: 'https://gmail.googleapis.com',
-  scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+  // gmail.modify covers messages.send, modify and trash, so one scope carries
+  // every write here rather than gmail.send sitting beside gmail.modify. It is
+  // the same restricted tier gmail.readonly already sat in, so the verification
+  // Google will ask for does not change.
+  scopes: ['https://www.googleapis.com/auth/gmail.modify'],
   auth: { type: 'bearer' },
   // Google answers 401 when the credential is bad. A 403 is something else,
   // most often an API that was never enabled on the project, and telling
@@ -70,6 +74,45 @@ export const gmailManifest: ProviderManifest = {
       request: 'GET /gmail/v1/users/me/labels/{id}',
       args: { id: { type: 'string', description: 'Label id, uppercase for the built-ins', required: true } },
       fields: ['id', 'name', 'type', 'messagesTotal', 'messagesUnread', 'threadsUnread'],
+    },
+    {
+      name: 'send_message',
+      description:
+        'Send an email. The whole RFC 2822 message goes in raw, headers included, base64 encoded',
+      write: true,
+      request: 'POST /gmail/v1/users/me/messages/send',
+      args: {
+        raw: {
+          type: 'base64url',
+          required: true,
+          description:
+            'The complete message, To and Subject headers included, then a blank line, then the body',
+        },
+      },
+      fields: ['id', 'threadId', 'labelIds'],
+    },
+    {
+      name: 'modify_message',
+      description:
+        'Add or remove labels on one message, which is how a message is marked read or archived',
+      write: true,
+      request: 'POST /gmail/v1/users/me/messages/{id}/modify',
+      args: {
+        id: { type: 'string', required: true },
+        // Removing UNREAD marks it read and removing INBOX archives it, which
+        // is why this is one tool rather than four named after the outcomes.
+        add_label_ids: { type: 'string[]', param: 'addLabelIds' },
+        remove_label_ids: { type: 'string[]', param: 'removeLabelIds' },
+      },
+      fields: ['id', 'threadId', 'labelIds'],
+    },
+    {
+      name: 'trash_message',
+      description: 'Move one message to the trash, where it can still be recovered',
+      write: true,
+      request: 'POST /gmail/v1/users/me/messages/{id}/trash',
+      args: { id: { type: 'string', required: true } },
+      fields: ['id', 'threadId', 'labelIds'],
     },
   ],
 }
