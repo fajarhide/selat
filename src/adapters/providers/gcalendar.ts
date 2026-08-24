@@ -132,6 +132,17 @@ export const gcalendarManifest: ProviderManifest = {
           description: 'RFC3339 with an offset',
           param: 'end.dateTime',
         },
+        // Not on update_event: events.patch overwrites an array outright, so
+        // naming one attendee there would silently uninvite everyone else.
+        attendees: {
+          type: 'object[]',
+          description: 'People to invite. Google emails them when the event is created',
+          items: {
+            email: { type: 'string', required: true },
+            display_name: { type: 'string', param: 'displayName' },
+            optional: { type: 'boolean', description: 'Attendance is not required' },
+          },
+        },
       },
       fields: ['id', 'summary', 'status', 'start', 'end', 'location', 'htmlLink'],
     },
