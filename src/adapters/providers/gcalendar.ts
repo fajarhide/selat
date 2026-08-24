@@ -19,7 +19,20 @@ export const gcalendarManifest: ProviderManifest = {
   auth: { type: 'bearer' },
   // Google answers 401 for a bad credential and keeps 403 for a disabled API
   // or a missing scope, neither of which reconnecting fixes.
-  errors: { forbidden: 'upstream_error' },
+  errors: {
+    forbidden: 'upstream_error',
+    // Google spends 403 on two unrelated things: a scope this grant never got,
+    // and an API that was never enabled. Only the first is fixed by
+    // reconnecting, and bodyFailure runs ahead of the 403 arm so it can say so.
+    // SERVICE_DISABLED is not in codes, so it keeps falling through to
+    // upstream_error.
+    bodyFailure: {
+      path: 'error.status',
+      equals: 'PERMISSION_DENIED',
+      codeFrom: 'error.errors.0.reason',
+      codes: { insufficientPermissions: 'reauth_required' },
+    },
+  },
   pagination: {
     style: 'cursor',
     size: 25,
