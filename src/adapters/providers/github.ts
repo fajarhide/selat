@@ -171,6 +171,90 @@ export const githubManifest: ProviderManifest = {
       },
       fields: ['number', 'title', 'state', 'html_url'],
     },
+    {
+      name: 'update_issue',
+      description: 'Change an issue: its title, body, labels, assignees, or its state to close or reopen it',
+      write: true,
+      request: 'PATCH /repos/{owner}/{repo}/issues/{number}',
+      args: {
+        owner: { type: 'string', required: true },
+        repo: { type: 'string', required: true },
+        number: { type: 'number', required: true },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        // Closing an issue is this tool with state closed. A close_issue entry
+        // would spend a second slot on an argument that already exists.
+        state: { type: 'string', enum: ['open', 'closed'] },
+        labels: { type: 'string[]', description: 'Replaces the labels on the issue' },
+        assignees: { type: 'string[]', description: 'Replaces the assignees, by GitHub login' },
+      },
+      fields: ['number', 'title', 'state', 'html_url'],
+    },
+    {
+      name: 'create_issue_comment',
+      description: 'Comment on an issue or a pull request. Both take the same issue number',
+      write: true,
+      request: 'POST /repos/{owner}/{repo}/issues/{number}/comments',
+      args: {
+        owner: { type: 'string', required: true },
+        repo: { type: 'string', required: true },
+        number: { type: 'number', required: true, description: 'Issue or pull request number' },
+        body: { type: 'string', required: true },
+      },
+      fields: ['id', 'user.login', 'body', 'created_at', 'html_url'],
+    },
+    {
+      name: 'create_pull_request',
+      description: 'Open a pull request from one branch into another',
+      write: true,
+      request: 'POST /repos/{owner}/{repo}/pulls',
+      args: {
+        owner: { type: 'string', required: true },
+        repo: { type: 'string', required: true },
+        title: { type: 'string', required: true },
+        head: { type: 'string', required: true, description: 'Branch the changes are on' },
+        base: { type: 'string', required: true, description: 'Branch to merge into, usually main' },
+        body: { type: 'string' },
+        draft: { type: 'boolean' },
+      },
+      fields: ['number', 'title', 'state', 'draft', 'head.sha', 'base.ref', 'html_url'],
+    },
+    {
+      name: 'create_pull_request_review',
+      description: 'Submit a review verdict on a pull request: approve, request changes, or comment',
+      write: true,
+      request: 'POST /repos/{owner}/{repo}/pulls/{number}/reviews',
+      args: {
+        owner: { type: 'string', required: true },
+        repo: { type: 'string', required: true },
+        number: { type: 'number', required: true },
+        // GitHub rejects REQUEST_CHANGES and COMMENT without a body, so the
+        // schema asks for one rather than letting the call fail upstream.
+        body: { type: 'string', required: true },
+        event: {
+          type: 'string',
+          enum: ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'],
+          default: 'COMMENT',
+        },
+      },
+      fields: ['id', 'user.login', 'state', 'body', 'submitted_at', 'html_url'],
+    },
+    {
+      name: 'merge_pull_request',
+      description: 'Merge a pull request. Read its reviews and check runs first',
+      write: true,
+      request: 'PUT /repos/{owner}/{repo}/pulls/{number}/merge',
+      args: {
+        owner: { type: 'string', required: true },
+        repo: { type: 'string', required: true },
+        number: { type: 'number', required: true },
+        commit_title: { type: 'string' },
+        merge_method: { type: 'string', enum: ['merge', 'squash', 'rebase'], default: 'merge' },
+      },
+      // merged is the field that decides it. GitHub answers 200 with
+      // merged false when the branch moved under the request.
+      fields: ['sha', 'merged', 'message'],
+    },
   ],
 }
 

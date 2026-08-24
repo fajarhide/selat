@@ -9,7 +9,13 @@ export const gcalendarManifest: ProviderManifest = {
   grantId: 'google',
   maturity: 'beta',
   baseUrl: 'https://www.googleapis.com',
-  scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+  // calendar.readonly stays: calendar.events does not grant calendarList.list,
+  // which is the only thing list_calendars calls, so dropping it would break a
+  // tool that works today.
+  scopes: [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.events',
+  ],
   auth: { type: 'bearer' },
   // Google answers 401 for a bad credential and keeps 403 for a disabled API
   // or a missing scope, neither of which reconnecting fixes.
@@ -87,6 +93,61 @@ export const gcalendarManifest: ProviderManifest = {
         'attendees',
         'conferenceData.entryPoints',
       ],
+    },
+    {
+      name: 'create_event',
+      description: 'Put an event on a calendar. Start and end are required',
+      write: true,
+      request: 'POST /calendar/v3/calendars/{calendar_id}/events',
+      args: {
+        calendar_id: { type: 'string', required: true, default: 'primary' },
+        summary: { type: 'string', description: 'The title shown on the calendar' },
+        description: { type: 'string' },
+        location: { type: 'string' },
+        // Carrying the offset rather than a separate timeZone argument: one
+        // argument cannot fill both start.timeZone and end.timeZone, and an
+        // RFC3339 stamp with an offset needs neither.
+        start_time: {
+          type: 'string',
+          required: true,
+          description: 'RFC3339 with an offset, for example 2026-08-25T14:00:00+07:00',
+          param: 'start.dateTime',
+        },
+        end_time: {
+          type: 'string',
+          required: true,
+          description: 'RFC3339 with an offset',
+          param: 'end.dateTime',
+        },
+      },
+      fields: ['id', 'summary', 'status', 'start', 'end', 'location', 'htmlLink'],
+    },
+    {
+      name: 'update_event',
+      description: 'Change one event. Anything left out keeps its current value',
+      write: true,
+      request: 'PATCH /calendar/v3/calendars/{calendar_id}/events/{event_id}',
+      args: {
+        calendar_id: { type: 'string', required: true, default: 'primary' },
+        event_id: { type: 'string', required: true },
+        summary: { type: 'string' },
+        description: { type: 'string' },
+        location: { type: 'string' },
+        start_time: { type: 'string', description: 'RFC3339 with an offset', param: 'start.dateTime' },
+        end_time: { type: 'string', description: 'RFC3339 with an offset', param: 'end.dateTime' },
+      },
+      fields: ['id', 'summary', 'status', 'start', 'end', 'location', 'htmlLink'],
+    },
+    {
+      name: 'delete_event',
+      description: 'Remove an event from a calendar for good',
+      write: true,
+      request: 'DELETE /calendar/v3/calendars/{calendar_id}/events/{event_id}',
+      // No fields: Calendar answers a delete with an empty body.
+      args: {
+        calendar_id: { type: 'string', required: true, default: 'primary' },
+        event_id: { type: 'string', required: true },
+      },
     },
   ],
 }
