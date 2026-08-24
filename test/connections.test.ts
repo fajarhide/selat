@@ -3,6 +3,7 @@ import {
   beginConnection,
   completeConnection,
   disconnect,
+  setApiKey,
   type ConnectionDeps,
 } from '../src/application/connections.ts'
 import { createRegistry, type ProviderAdapter } from '../src/adapters/providers/registry.ts'
@@ -183,5 +184,27 @@ describe('a grant shared by several providers', () => {
   it('ignores a sibling the workspace has not connected', async () => {
     const { url } = await beginConnection(shared(), { workspaceId, prefix: 'cal' })
     expect(new URL(url).searchParams.get('scope')).toBe('cal.read')
+  })
+})
+
+describe('api key validation', () => {
+  it('does not save or enable a provider when validation refuses the key', async () => {
+    const base = fakeProvider()
+    const rejected: ProviderAdapter = {
+      ...base,
+      id: 'keyed',
+      prefix: 'keyed',
+      credential: 'api_key',
+      validateKey: async () => {
+        throw new Error('refused')
+      },
+    }
+    const shared = deps({ registry: createRegistry([rejected]) })
+
+    await expect(setApiKey(shared, { workspaceId, prefix: 'keyed', key: 'wrong' })).rejects.toThrow(
+      'refused',
+    )
+    expect(await shared.grants.load(workspaceId, 'keyed')).toBeNull()
+    expect(await shared.enablement.enabledPrefixes(workspaceId)).not.toContain('keyed')
   })
 })

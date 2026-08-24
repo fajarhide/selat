@@ -21,6 +21,13 @@ export const EPHEMERAL_FLOOR = 49152
 
 let nextPort = 34000
 
+/** Keep validation probes in tests offline unless a test explicitly overrides fetch. */
+const offlineFetch = (async () =>
+  new Response('{}', {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })) as typeof fetch
+
 /**
  * `listen(0)` draws from the same ephemeral range every other process on the
  * machine binds at random, so a suite that uses it occasionally addresses a
@@ -88,6 +95,10 @@ export async function startTestServer(
     config: testConfig,
     registry: bootRegistry(),
     ...opts.overrides,
+    connectionOverrides: {
+      fetch: offlineFetch,
+      ...opts.overrides?.connectionOverrides,
+    },
   })
   const server = await listenBelowEphemeral(app)
   open.push(server)

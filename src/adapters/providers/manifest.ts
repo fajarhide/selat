@@ -141,6 +141,8 @@ export type ProviderManifest = {
   baseUrl: string
   scopes: string[]
   auth: AuthScheme
+  /** Optional request made before an api key is stored in the vault. */
+  validate?: { request: `${Method} /${string}` }
   /** Merged under the headers the executor sets, never over them. */
   headers?: Record<string, string>
   pagination?: Pagination
@@ -175,6 +177,54 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
     scopes: manifest.scopes,
     credential: manifest.auth.type === 'api_key' ? 'api_key' : 'oauth',
     listTools: () => manifest.tools.map(toolDef),
+
+    ...(manifest.validate
+      ? {
+          async validateKey(ctx: AdapterContext): Promise<void> {
+            const space = manifest.validate!.request.indexOf(' ')
+            const method = manifest.validate!.request.slice(0, space)
+            const path = manifest.validate!.request.slice(space + 1)
+            let res: Response
+            try {
+              res = await followRedirects(
+                ctx.fetch,
+                fail,
+                manifest.auth,
+                withKeyInQuery(`${manifest.baseUrl}${path}`, manifest.auth, ctx.accessToken ?? ''),
+                {
+                  method,
+                  headers: {
+                    ...manifest.headers,
+                    ...authHeader(manifest.auth, ctx.accessToken ?? ''),
+                    'x-request-id': ctx.requestId,
+                  },
+                },
+              )
+            } catch {
+              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+            }
+            // invalid_arguments, not reauth_required: the key being refused
+            // arrived in this request, so it is a bad argument rather than a
+            // stored credential that went stale.
+            if (res.status === 401) {
+              throw fail('invalid_arguments', `${manifest.prefix} refused the api key`)
+            }
+            if (res.status === 403) {
+              // A bare 403 does not mean a bad key for every vendor, which is
+              // the whole reason errors.forbidden exists.
+              throw fail(
+                manifest.errors?.forbidden ?? 'invalid_arguments',
+                `${manifest.prefix} refused the api key`,
+              )
+            }
+            if (!res.ok) {
+              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+            }
+            // Nothing reads this body, and an unread one holds the socket.
+            await res.body?.cancel()
+          },
+        }
+      : {}),
 
     async callTool(ctx: AdapterContext, name: string, rawArgs: unknown): Promise<ToolResult> {
       const tool = byName.get(name)

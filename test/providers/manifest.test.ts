@@ -64,6 +64,55 @@ function withTools(tools: ProviderManifest['tools'], over: Partial<ProviderManif
 const demo = manifestProvider(base)
 
 describe('manifest executor: requests', () => {
+  it('validates an api key without storing or exposing it', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' }, auth: { type: 'api_key', in: 'header', name: 'authorization', prefix: 'Bot ' } })
+    const upstream = fakeUpstream([{ match: /users\/@me/, body: { id: 'bot-1' } }])
+
+    await validator.validateKey?.({ ...ctx(upstream), accessToken: 'secret-token' })
+
+    expect(upstream.calls[0]?.url).toBe('https://api.demo.test/users/@me')
+    expect((upstream.calls[0]?.init?.headers as Record<string, string>).authorization).toBe('Bot secret-token')
+  })
+
+  it('rejects an api key when its validation request fails', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    const upstream = fakeUpstream([{ match: /users\/@me/, status: 401, body: { message: 'bad token' } }])
+
+    await expect(validator.validateKey?.({ ...ctx(upstream), accessToken: 'wrong' })).rejects.toMatchObject({
+      code: 'invalid_arguments',
+    })
+  })
+
+  it('puts query API keys on the validation request', async () => {
+    const validator = withTools([], {
+      validate: { request: 'GET /users/@me' },
+      auth: { type: 'api_key', in: 'query', name: 'api_key' },
+    })
+    const upstream = fakeUpstream([{ match: /users\/@me\?api_key=secret-token/, body: { id: 'bot-1' } }])
+
+    await validator.validateKey?.({ ...ctx(upstream), accessToken: 'secret-token' })
+
+    expect(upstream.calls[0]?.url).toContain('api_key=secret-token')
+  })
+
+  it('reports validation service failures as upstream errors', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    const upstream = fakeUpstream([{ match: /users\/@me/, status: 503, body: { message: 'busy' } }])
+
+    await expect(validator.validateKey?.({ ...ctx(upstream), accessToken: 'secret-token' })).rejects.toMatchObject({
+      code: 'upstream_error',
+    })
+  })
+
+  it('reports validation network failures as upstream errors', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    const unreachable = { ...ctx(fakeUpstream([])), fetch: (async () => { throw new Error('offline') }) as typeof fetch }
+
+    await expect(validator.validateKey?.({ ...unreachable, accessToken: 'secret-token' })).rejects.toMatchObject({
+      code: 'upstream_error',
+    })
+  })
+
   it('fills path placeholders and escapes every segment', async () => {
     const upstream = fakeUpstream([{ match: /boxes/, body: itemsPage(1) }])
     await demo.callTool(ctx(upstream), 'list_things', { box: '../../admin' })
