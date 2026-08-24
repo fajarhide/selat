@@ -220,3 +220,62 @@ describe('github provider', () => {
     expect(github.listTools().find((tool) => tool.name === 'create_issue')?.write).toBe(true)
   })
 })
+
+describe('github writes', () => {
+  it('closes an issue with a PATCH that carries the state in the body', async () => {
+    // The executor routes an unmatched argument by method, so a PATCH that put
+    // state in the query string would answer 200 and change nothing.
+    const upstream = fakeUpstream([{ match: /issues/, body: { number: 7, state: 'closed' } }])
+    const result = await github.callTool(ctx(upstream), 'update_issue', {
+      owner: 'o',
+      repo: 'r',
+      number: 7,
+      state: 'closed',
+    })
+    expect(result.content).toEqual({ number: 7, state: 'closed' })
+    expect(upstream.calls[0]?.init?.method).toBe('PATCH')
+    expect(upstream.calls[0]?.url).not.toContain('state=')
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ state: 'closed' })
+  })
+
+  it('sends a review verdict and refuses one the API does not accept', async () => {
+    const upstream = fakeUpstream([{ match: /reviews/, body: { id: 5, state: 'CHANGES_REQUESTED' } }])
+    await github.callTool(ctx(upstream), 'create_pull_request_review', {
+      owner: 'o',
+      repo: 'r',
+      number: 43,
+      body: 'no',
+      event: 'REQUEST_CHANGES',
+    })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      body: 'no',
+      event: 'REQUEST_CHANGES',
+    })
+
+    await expect(
+      github.callTool(ctx(upstream), 'create_pull_request_review', {
+        owner: 'o',
+        repo: 'r',
+        number: 43,
+        body: 'no',
+        event: 'LGTM',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_arguments' })
+  })
+
+  it('merges with a PUT and reports a refused merge as merged false', async () => {
+    // GitHub answers 200 with merged false when the branch moved, so dropping
+    // the field would read as a successful merge that never happened.
+    const upstream = fakeUpstream([
+      { match: /merge/, body: { sha: 'abc', merged: false, message: 'Base branch was modified' } },
+    ])
+    const result = await github.callTool(ctx(upstream), 'merge_pull_request', {
+      owner: 'o',
+      repo: 'r',
+      number: 43,
+    })
+    expect(result.content).toEqual({ sha: 'abc', merged: false, message: 'Base branch was modified' })
+    expect(upstream.calls[0]?.init?.method).toBe('PUT')
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({ merge_method: 'merge' })
+  })
+})
