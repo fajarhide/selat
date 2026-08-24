@@ -186,13 +186,17 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
             const path = manifest.validate!.request.slice(space + 1)
             let res: Response
             try {
-              res = await ctx.fetch(
+              res = await followRedirects(
+                ctx.fetch,
+                fail,
+                manifest.auth,
                 withKeyInQuery(`${manifest.baseUrl}${path}`, manifest.auth, ctx.accessToken ?? ''),
                 {
                   method,
                   headers: {
                     ...manifest.headers,
                     ...authHeader(manifest.auth, ctx.accessToken ?? ''),
+                    'x-request-id': ctx.requestId,
                   },
                 },
               )
