@@ -27,7 +27,7 @@ export type AuthScheme =
     }
 
 export type ArgDef = {
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'base64' | 'base64url'
+  type: 'string' | 'number' | 'boolean' | 'string[]' | 'base64' | 'base64url' | 'object[]'
   description?: string
   required?: boolean
   enum?: string[]
@@ -46,6 +46,13 @@ export type ArgDef = {
    * alone cannot express.
    */
   in?: 'query' | 'body'
+  /**
+   * The shape of one element. Required by `object[]` and meaningless without
+   * it. Each key is an ArgDef in its own right and runs through the same
+   * coercion the outer arguments do, so an enum or a number inside a list of
+   * objects is checked exactly like one at the top level.
+   */
+  items?: Record<string, ArgDef>
 }
 
 export type Pagination =
@@ -409,20 +416,38 @@ function assertPathIsFillable(tool: ToolManifest): void {
   }
 }
 
+/** One argument's JSON schema. Recursive, so the shape inside an `object[]` is
+ *  described the same way the arguments around it are. */
+function propertySchema(def: ArgDef): object {
+  const shape =
+    def.type === 'string[]'
+      ? { type: 'array', items: { type: 'string' } }
+      : def.type === 'object[]'
+        ? { type: 'array', items: objectSchema(def.items ?? {}) }
+        : { type: def.type === 'base64' || def.type === 'base64url' ? 'string' : def.type }
+  return {
+    ...shape,
+    ...(def.description ? { description: def.description } : {}),
+    ...(def.enum ? { enum: def.enum } : {}),
+    ...(def.default === undefined ? {} : { default: def.default }),
+  }
+}
+
+function objectSchema(args: Record<string, ArgDef>): object {
+  const properties: Record<string, object> = {}
+  const required: string[] = []
+  for (const [name, def] of Object.entries(args)) {
+    properties[name] = propertySchema(def)
+    if (def.required) required.push(name)
+  }
+  return { type: 'object', properties, ...(required.length ? { required } : {}) }
+}
+
 function toolDef(tool: ToolManifest): ToolDef {
   const properties: Record<string, object> = {}
   const required: string[] = []
   for (const [name, def] of Object.entries(tool.args)) {
-    const shape =
-      def.type === 'string[]'
-        ? { type: 'array', items: { type: 'string' } }
-        : { type: def.type === 'base64' || def.type === 'base64url' ? 'string' : def.type }
-    properties[name] = {
-      ...shape,
-      ...(def.description ? { description: def.description } : {}),
-      ...(def.enum ? { enum: def.enum } : {}),
-      ...(def.default === undefined ? {} : { default: def.default }),
-    }
+    properties[name] = propertySchema(def)
     if (def.required) required.push(name)
   }
   // Never written by hand, which is what stops one provider breaking the
@@ -441,69 +466,94 @@ function toolDef(tool: ToolManifest): ToolDef {
   }
 }
 
-function validate(fail: Fail, tool: ToolManifest, rawArgs: unknown): Record<string, unknown> {
-  const given = (rawArgs ?? {}) as Record<string, unknown>
+/** One set of arguments against one set of definitions. Split out of `validate`
+ *  so `object[]` can put its elements through the very same checks instead of
+ *  growing a second, weaker validator beside this one. */
+function coerceAll(
+  fail: Fail,
+  args: Record<string, ArgDef>,
+  given: Record<string, unknown>,
+  path: string,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {}
-
-  for (const [name, def] of Object.entries(tool.args)) {
+  for (const [name, def] of Object.entries(args)) {
     const raw = given[name]
     const value = raw === undefined || raw === null || raw === '' ? def.default : raw
+    const label = path ? `${path}.${name}` : name
     if (value === undefined) {
-      if (def.required) throw fail('invalid_arguments', `${name} is required`)
+      if (def.required) throw fail('invalid_arguments', `${label} is required`)
       continue
     }
+    out[name] = coerce(fail, label, def, value)
+  }
+  return out
+}
 
-    if (def.type === 'number') {
-      const num = Number(value)
-      if (!Number.isFinite(num)) throw fail('invalid_arguments', `${name} must be a number`)
-      out[name] = num
-      continue
-    }
-    if (def.type === 'boolean') {
-      if (typeof value === 'boolean') out[name] = value
-      else if (value === 'true' || value === 'false') out[name] = value === 'true'
-      else throw fail('invalid_arguments', `${name} must be a boolean`)
-      continue
-    }
+function validate(fail: Fail, tool: ToolManifest, rawArgs: unknown): Record<string, unknown> {
+  return coerceAll(fail, tool.args, (rawArgs ?? {}) as Record<string, unknown>, '')
+}
 
-    const oneOf = (item: unknown): string => {
-      const text = String(item)
-      if (def.enum && !def.enum.includes(text)) {
-        throw fail('invalid_arguments', `${name} must be one of ${def.enum.join(', ')}`)
-      }
-      return text
-    }
-
-    if (def.type === 'base64' || def.type === 'base64url') {
-      const text = String(value).replace(/\s/g, '')
-      // Buffer.from ignores anything outside the alphabet rather than failing,
-      // so a mistyped payload would upload as silent garbage without this.
-      // One alphabet or the other, never a mix: `a-b+c` is a typo, not base64.
-      const standard = /^[A-Za-z0-9+/]*={0,2}$/.test(text)
-      const urlSafe = /^[A-Za-z0-9_-]*={0,2}$/.test(text)
-      if (!standard && !urlSafe) {
-        throw fail('invalid_arguments', `${name} must be base64`)
-      }
-      // Gmail wants the url-safe alphabet and a model reaches for the standard
-      // one, so convert rather than let the vendor refuse a correct payload.
-      out[name] =
-        def.type === 'base64url' && standard
-          ? Buffer.from(text, 'base64').toString('base64url')
-          : text
-      continue
-    }
-
-    // A bare value is taken as a one-element list, because an agent handed one
-    // label writes "bug" about as often as ["bug"].
-    if (def.type === 'string[]') {
-      out[name] = (Array.isArray(value) ? value : [value]).map(oneOf)
-      continue
-    }
-
-    out[name] = oneOf(value)
+function coerce(fail: Fail, name: string, def: ArgDef, value: unknown): unknown {
+  if (def.type === 'number') {
+    const num = Number(value)
+    if (!Number.isFinite(num)) throw fail('invalid_arguments', `${name} must be a number`)
+    return num
+  }
+  if (def.type === 'boolean') {
+    if (typeof value === 'boolean') return value
+    if (value === 'true' || value === 'false') return value === 'true'
+    throw fail('invalid_arguments', `${name} must be a boolean`)
   }
 
-  return out
+  const oneOf = (item: unknown): string => {
+    const text = String(item)
+    if (def.enum && !def.enum.includes(text)) {
+      throw fail('invalid_arguments', `${name} must be one of ${def.enum.join(', ')}`)
+    }
+    return text
+  }
+
+  if (def.type === 'base64' || def.type === 'base64url') {
+    const text = String(value).replace(/\s/g, '')
+    // Buffer.from ignores anything outside the alphabet rather than failing,
+    // so a mistyped payload would upload as silent garbage without this.
+    // One alphabet or the other, never a mix: `a-b+c` is a typo, not base64.
+    const standard = /^[A-Za-z0-9+/]*={0,2}$/.test(text)
+    const urlSafe = /^[A-Za-z0-9_-]*={0,2}$/.test(text)
+    if (!standard && !urlSafe) {
+      throw fail('invalid_arguments', `${name} must be base64`)
+    }
+    // Gmail wants the url-safe alphabet and a model reaches for the standard
+    // one, so convert rather than let the vendor refuse a correct payload.
+    return def.type === 'base64url' && standard
+      ? Buffer.from(text, 'base64').toString('base64url')
+      : text
+  }
+
+  // A bare value is taken as a one-element list, because an agent handed one
+  // label writes "bug" about as often as ["bug"].
+  if (def.type === 'string[]') {
+    return (Array.isArray(value) ? value : [value]).map(oneOf)
+  }
+
+  // Same courtesy: an agent adding one attendee writes the object about as
+  // often as a list holding it.
+  if (def.type === 'object[]') {
+    const shape = def.items ?? {}
+    return (Array.isArray(value) ? value : [value]).map((entry, index) => {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw fail('invalid_arguments', `${name}[${index}] must be an object`)
+      }
+      const row = coerceAll(fail, shape, entry as Record<string, unknown>, `${name}[${index}]`)
+      // buildRequest applies `param` to the outer arguments and never reaches
+      // inside one, so the rename has to happen here or it is silently lost.
+      return Object.fromEntries(
+        Object.entries(row).map(([key, item]) => [shape[key]?.param ?? key, item]),
+      )
+    })
+  }
+
+  return oneOf(value)
 }
 
 function readCursor(

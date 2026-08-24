@@ -147,6 +147,119 @@ describe('manifest executor: requests', () => {
     expect(err.code).toBe('upstream_timeout')
   })
 
+  it('sends a list of objects, coercing each element the way a top level argument is', async () => {
+    // The point of object[]: one inner key renamed, one coerced from a string
+    // to a boolean, one enum checked. A second validator would drift from all
+    // three, which is why elements go through coerceAll.
+    const tool = withTools([
+      {
+        name: 'invite',
+        description: 'invite people to a thing',
+        write: true,
+        request: 'POST /invites',
+        args: {
+          guests: {
+            type: 'object[]',
+            items: {
+              email: { type: 'string', required: true },
+              display_name: { type: 'string', param: 'displayName' },
+              optional: { type: 'boolean' },
+              tier: { type: 'string', enum: ['gold', 'silver'] },
+            },
+          },
+        },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /invites/, body: { ok: true } }])
+
+    await tool.callTool(ctx(upstream), 'invite', {
+      guests: [
+        { email: 'a@example.test', display_name: 'A', optional: 'true', tier: 'gold' },
+        { email: 'b@example.test' },
+      ],
+    })
+
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      guests: [
+        { email: 'a@example.test', displayName: 'A', optional: true, tier: 'gold' },
+        { email: 'b@example.test' },
+      ],
+    })
+  })
+
+  it('takes a bare object as a one element list, the way string[] takes a bare string', async () => {
+    const tool = withTools([
+      {
+        name: 'invite',
+        description: 'invite people to a thing',
+        write: true,
+        request: 'POST /invites',
+        args: { guests: { type: 'object[]', items: { email: { type: 'string', required: true } } } },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /invites/, body: {} }])
+    await tool.callTool(ctx(upstream), 'invite', { guests: { email: 'a@example.test' } })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      guests: [{ email: 'a@example.test' }],
+    })
+  })
+
+  it('names the element and the key when something inside the list is wrong', async () => {
+    // "email is required" on a five element list is a puzzle. The index is the
+    // difference between a fixable error and a retry loop.
+    const tool = withTools([
+      {
+        name: 'invite',
+        description: 'invite people to a thing',
+        write: true,
+        request: 'POST /invites',
+        args: { guests: { type: 'object[]', items: { email: { type: 'string', required: true } } } },
+      },
+    ])
+    const upstream = fakeUpstream([{ match: /invites/, body: {} }])
+
+    const missing = await tool
+      .callTool(ctx(upstream), 'invite', { guests: [{ email: 'a@example.test' }, {}] })
+      .catch((e) => e)
+    expect(missing.code).toBe('invalid_arguments')
+    expect(missing.message).toContain('guests[1].email')
+
+    const notAnObject = await tool
+      .callTool(ctx(upstream), 'invite', { guests: ['a@example.test'] })
+      .catch((e) => e)
+    expect(notAnObject.code).toBe('invalid_arguments')
+    expect(notAnObject.message).toContain('guests[0]')
+    expect(upstream.calls).toHaveLength(0)
+  })
+
+  it('describes the element shape in the tool schema, not just an array', async () => {
+    // Without this an agent is told "array" and has to guess what goes inside.
+    const tool = withTools([
+      {
+        name: 'invite',
+        description: 'invite people to a thing',
+        write: true,
+        request: 'POST /invites',
+        args: {
+          guests: {
+            type: 'object[]',
+            items: { email: { type: 'string', required: true }, optional: { type: 'boolean' } },
+          },
+        },
+      },
+    ])
+    const schema = tool.listTools()[0]!.inputSchema as {
+      properties: { guests: { type: string; items: { type: string; properties: object; required: string[] } } }
+    }
+    expect(schema.properties.guests.type).toBe('array')
+    expect(schema.properties.guests.items.type).toBe('object')
+    expect(schema.properties.guests.items.properties).toEqual({
+      email: { type: 'string' },
+      optional: { type: 'boolean' },
+    })
+    expect(schema.properties.guests.items.required).toEqual(['email'])
+  })
+
   it('puts query API keys on the validation request', async () => {
     const validator = withTools([], {
       validate: { request: 'GET /users/@me' },

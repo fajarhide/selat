@@ -236,6 +236,18 @@ export const githubManifest: ProviderManifest = {
           enum: ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'],
           default: 'COMMENT',
         },
+        // A verdict says what to change and the inline comments say where.
+        // Posted in the same call because a review submitted first cannot be
+        // given lines afterwards.
+        comments: {
+          type: 'object[]',
+          description: 'Inline comments to attach to the review, each on one line of the diff',
+          items: {
+            path: { type: 'string', required: true, description: 'File path as it appears in the diff' },
+            body: { type: 'string', required: true },
+            line: { type: 'number', description: 'Line number in the file after the change' },
+          },
+        },
       },
       fields: ['id', 'user.login', 'state', 'body', 'submitted_at', 'html_url'],
     },
