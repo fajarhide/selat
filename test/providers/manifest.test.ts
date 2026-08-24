@@ -83,6 +83,70 @@ describe('manifest executor: requests', () => {
     })
   })
 
+  it('reports a rate limited key check as rate_limited with the retry hint', async () => {
+    // The validator used to answer 502 here, so a client retried immediately
+    // and made it worse. It shares the executor's mapping now.
+    const validator = withTools([], {
+      validate: { request: 'GET /users/@me' },
+      errors: { retryAfter: [{ header: 'retry-after', as: 'seconds' }] },
+    })
+    const upstream = fakeUpstream([
+      { match: /users\/@me/, status: 429, body: {}, headers: { 'retry-after': '30' } },
+    ])
+
+    const err = await validator
+      .validateKey?.({ ...ctx(upstream), accessToken: 'k' })
+      .catch((e) => e)
+    expect(err.code).toBe('rate_limited')
+    expect(err.details.retryAfter).toBe(30)
+  })
+
+  it('carries the vendor reason out of a failed key check', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    const upstream = fakeUpstream([
+      { match: /users\/@me/, status: 500, raw: 'upstream exploded' },
+    ])
+
+    const err = await validator
+      .validateKey?.({ ...ctx(upstream), accessToken: 'k' })
+      .catch((e) => e)
+    expect(err.code).toBe('upstream_error')
+    expect(err.message).toContain('upstream exploded')
+  })
+
+  it('gives the key check a deadline and cancels it rather than only waiting', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    let seen: AbortSignal | undefined
+    const fetching = (async (_url: string, init?: RequestInit) => {
+      seen = init?.signal ?? undefined
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    }) as typeof fetch
+
+    await validator.validateKey?.({
+      workspaceId: 'ws-1',
+      requestId: 'req-1',
+      accessToken: 'k',
+      fetch: fetching,
+    })
+    // An AbortSignal aborts the request. A raced promise would leave the socket
+    // held, which is what this is here to stop happening again.
+    expect(seen).toBeInstanceOf(AbortSignal)
+  })
+
+  it('maps an aborted key check to upstream_timeout, not a generic failure', async () => {
+    const validator = withTools([], { validate: { request: 'GET /users/@me' } })
+    const timingOut = (async () => {
+      const err = new Error('The operation was aborted due to timeout')
+      err.name = 'TimeoutError'
+      throw err
+    }) as typeof fetch
+
+    const err = await validator
+      .validateKey?.({ workspaceId: 'ws-1', requestId: 'req-1', accessToken: 'k', fetch: timingOut })
+      .catch((e) => e)
+    expect(err.code).toBe('upstream_timeout')
+  })
+
   it('puts query API keys on the validation request', async () => {
     const validator = withTools([], {
       validate: { request: 'GET /users/@me' },

@@ -198,30 +198,36 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
                     ...authHeader(manifest.auth, ctx.accessToken ?? ''),
                     'x-request-id': ctx.requestId,
                   },
+                  // A vendor that accepts the connection and never answers
+                  // would otherwise hold the handler for undici's default.
+                  // AbortSignal rather than a raced promise, because this has
+                  // to cancel the request and not merely stop waiting on it.
+                  // followRedirects spreads init, so it survives every hop.
+                  signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
                 },
               )
+            } catch (err) {
+              if ((err as Error)?.name === 'TimeoutError') {
+                throw fail(
+                  'upstream_timeout',
+                  `${manifest.prefix} did not answer the key check within ${VALIDATE_TIMEOUT_MS}ms`,
+                )
+              }
+              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+            }
+            // Drained either way: an unread body holds the socket, and on a
+            // failure the text is the only thing that says why.
+            const text = await res.text().catch(() => '')
+            let body: unknown
+            try {
+              body = JSON.parse(text)
             } catch {
-              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
+              body = undefined
             }
-            // invalid_arguments, not reauth_required: the key being refused
-            // arrived in this request, so it is a bad argument rather than a
-            // stored credential that went stale.
-            if (res.status === 401) {
-              throw fail('invalid_arguments', `${manifest.prefix} refused the api key`)
-            }
-            if (res.status === 403) {
-              // A bare 403 does not mean a bad key for every vendor, which is
-              // the whole reason errors.forbidden exists.
-              throw fail(
-                manifest.errors?.forbidden ?? 'invalid_arguments',
-                `${manifest.prefix} refused the api key`,
-              )
-            }
-            if (!res.ok) {
-              throw fail('upstream_error', `${manifest.prefix} validation request failed`)
-            }
-            // Nothing reads this body, and an unread one holds the socket.
-            await res.body?.cancel()
+            // invalid_arguments rather than reauth_required: the key being
+            // refused arrived in this request, so it is a bad argument and not
+            // a stored credential that went stale.
+            throwIfFailed(manifest, res, fail, body, res.ok ? undefined : text, 'invalid_arguments')
           },
         }
       : {}),
@@ -271,6 +277,10 @@ export function manifestProvider(manifest: ProviderManifest): ProviderAdapter {
 type Fail = (code: ErrorCode, message: string, retryAfter?: number) => GatewayError
 
 const MAX_HOPS = 5
+/** Shorter than the 30s a tool call gets: this one runs inside an HTTP request
+ *  somebody is waiting on, and a key that needs half a minute to check is
+ *  already an answer. */
+const VALIDATE_TIMEOUT_MS = 10_000
 
 /**
  * Redirects are followed here rather than by fetch, for one reason: a redirect
@@ -630,32 +640,23 @@ async function binaryResult(fail: Fail, prefix: string, res: Response): Promise<
   }
 }
 
-async function readResponse(
+/**
+ * Every way a response can be a failure, in one place, so a new vendor rule
+ * lands once instead of in each caller. The executor and the api key validator
+ * differ on exactly one thing, which is what `credentialCode` carries: a stored
+ * credential that stopped working wants reauth_required, and a key that arrived
+ * in the request being served is a bad argument instead.
+ */
+function throwIfFailed(
   manifest: ProviderManifest,
-  tool: ToolManifest,
-  paging: Pagination | undefined,
-  cursor: string | number | undefined,
   res: Response,
   fail: Fail,
-  callerChoseFields = false,
-): Promise<ToolResult> {
+  body: unknown,
+  failureText: string | undefined,
+  credentialCode: ErrorCode,
+): void {
   const rules = manifest.errors ?? {}
   const failure = rules.bodyFailure
-
-  // Parsed before the status is looked at, because Slack answers 200 with
-  // {ok: false} and the status carries no signal at all.
-  // Read once, whatever the outcome. On a failure the text is the only thing
-  // that says why, and a Response body cannot be read twice.
-  const failureText = res.ok ? undefined : await res.text().catch(() => '')
-  const body = res.ok
-    ? await readOk(tool, res)
-    : ((): unknown => {
-        try {
-          return JSON.parse(failureText ?? '')
-        } catch {
-          return undefined
-        }
-      })()
 
   if (failure && getPath(body, failure.path) === failure.equals) {
     const raw = getPath(body, failure.codeFrom)
@@ -672,13 +673,13 @@ async function readResponse(
     throw fail('rate_limited', `${manifest.prefix} rate limit reached`, retryAfterFrom(res, rules))
   }
   if (res.status === 401) {
-    throw fail('reauth_required', `${manifest.prefix} rejected the credential`)
+    throw fail(credentialCode, `${manifest.prefix} rejected the credential`)
   }
   if (res.status === 403) {
-    const code = rules.forbidden ?? 'reauth_required'
+    const code = rules.forbidden ?? credentialCode
     throw fail(
       code,
-      code === 'reauth_required'
+      code === credentialCode
         ? `${manifest.prefix} rejected the credential`
         : `${manifest.prefix} refused the request, and reconnecting will not help`,
     )
@@ -707,6 +708,33 @@ async function readResponse(
         : `${manifest.prefix} returned ${res.status}`,
     )
   }
+}
+
+async function readResponse(
+  manifest: ProviderManifest,
+  tool: ToolManifest,
+  paging: Pagination | undefined,
+  cursor: string | number | undefined,
+  res: Response,
+  fail: Fail,
+  callerChoseFields = false,
+): Promise<ToolResult> {
+  // Parsed before the status is looked at, because Slack answers 200 with
+  // {ok: false} and the status carries no signal at all.
+  // Read once, whatever the outcome. On a failure the text is the only thing
+  // that says why, and a Response body cannot be read twice.
+  const failureText = res.ok ? undefined : await res.text().catch(() => '')
+  const body = res.ok
+    ? await readOk(tool, res)
+    : ((): unknown => {
+        try {
+          return JSON.parse(failureText ?? '')
+        } catch {
+          return undefined
+        }
+      })()
+
+  throwIfFailed(manifest, res, fail, body, failureText, 'reauth_required')
 
   const keep = (value: unknown) => (callerChoseFields ? value : project(value, tool.fields))
 
