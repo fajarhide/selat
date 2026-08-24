@@ -79,7 +79,7 @@ describe('manifest executor: requests', () => {
     const upstream = fakeUpstream([{ match: /users\/@me/, status: 401, body: { message: 'bad token' } }])
 
     await expect(validator.validateKey?.({ ...ctx(upstream), accessToken: 'wrong' })).rejects.toMatchObject({
-      code: 'invalid_credential',
+      code: 'invalid_arguments',
     })
   })
 
