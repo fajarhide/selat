@@ -39,7 +39,7 @@ to click. `rate_limited` carries `retry_after`. Every response carries a
 
 **Runs on your hardware, or on ours.** One command locally with an embedded
 Postgres, a podman quadlet on a VPS, or the hosted instance at
-[selat.weekndlabs.com](https://selat.weekndlabs.com). Apache-2.0 either way, and
+[selat.dev](https://selat.dev). Apache-2.0 either way, and
 that includes every provider adapter.
 
 ---
@@ -502,8 +502,8 @@ private repository, which reaches this one over HTTP like any other client.
 ---
 
 <p align="center">
-  <a href="https://selat.weekndlabs.com">Hosted</a> ·
-  <a href="https://selat.weekndlabs.com/docs">Docs</a> ·
+  <a href="https://selat.dev">Hosted</a> ·
+  <a href="https://selat.dev/docs">Docs</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="SECURITY.md">Security</a>
