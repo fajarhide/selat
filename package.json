@@ -13,7 +13,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "quickstart": "node --env-file-if-exists=.env --experimental-strip-types scripts/quickstart.ts"
+    "quickstart": "node --env-file-if-exists=.env --experimental-strip-types scripts/quickstart.ts",
+    "check:google": "node --env-file-if-exists=.env --experimental-strip-types scripts/check-google-scopes.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.6",
