@@ -2,6 +2,40 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## 0.1.3 - 2026-08-28
+
+### Added
+
+- Gmail can write. `send_message`, `modify_message` and `trash_message` join the
+  four reads. The scope moves from `gmail.readonly` to `gmail.modify`, so every
+  existing Google connection re-consents once (#86).
+- Google Calendar can write. `create_event`, `update_event` and `delete_event`,
+  on `calendar.events` (#86).
+- GitHub can answer a review and close what it opened (#85).
+- An api key is called against the vendor before it is stored, so a typo fails
+  at connect time rather than on the first tool call (#82, thanks
+  @mikemikimike).
+- A manifest argument can hold a list of objects, which is what `attendees` on a
+  calendar event needed (#92).
+
+### Fixed
+
+- A Google 403 from a scope the grant never got now says `reauth_required`
+  instead of `upstream_error`, so the caller is told to reconnect. A 403 from an
+  API that was never enabled still reports upstream, because reconnecting does
+  not fix that one (#89).
+- The key check runs under a deadline, and the executor maps its failures apart
+  from upstream ones (#91).
+
+### Changed
+
+- Calendar asks for `calendar.calendarlist.readonly` where it used to ask for
+  `calendar.readonly`. `calendar.events` already covers every event tool,
+  reads included, and the only call outside it is `list_calendars` on
+  `/users/me/calendarList`. The old pair read every calendar wholesale to
+  satisfy one list call.
+- Hosted links point at `selat.dev`. The old host still answers (#93).
+
 ## 0.1.2 - 2026-08-23
 
 ### Added

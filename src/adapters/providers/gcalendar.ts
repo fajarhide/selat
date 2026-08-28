@@ -13,7 +13,12 @@ export const gcalendarManifest: ProviderManifest = {
   // which is the only thing list_calendars calls, so dropping it would break a
   // tool that works today.
   scopes: [
-    'https://www.googleapis.com/auth/calendar.readonly',
+    // calendar.events covers reads as well as writes, and every event tool
+    // goes through /calendars/{id}/events. The only call outside that is
+    // list_calendars on /users/me/calendarList, which is all the second
+    // scope grants. calendar.readonly would cover both and is what this
+    // used to ask for, but it reads every calendar wholesale for one list.
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
     'https://www.googleapis.com/auth/calendar.events',
   ],
   auth: { type: 'bearer' },
