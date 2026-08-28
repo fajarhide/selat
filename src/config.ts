@@ -2,6 +2,13 @@ import { z } from 'zod'
 
 const schema = z.object({
   PORT: z.coerce.number().default(8080),
+  // Which address to listen on. Unset keeps Node's own choice, every interface,
+  // because a container on a bridge network is unreachable on loopback and that
+  // is the common deployment. A host-networked one behind a reverse proxy
+  // should set 127.0.0.1: the proxy is the only thing that needs this port, and
+  // binding wider leaves the firewall as the only thing between the gateway and
+  // the internet in plaintext, with no access log to show for it.
+  HOST: z.string().min(1).optional(),
   // Absent means local mode: an embedded Postgres under the data directory.
   // A deployment sets it, and setting it takes that path out of the picture.
   DATABASE_URL: z.string().min(1).optional(),
@@ -14,6 +21,8 @@ const schema = z.object({
 
 export type Config = {
   port: number
+  /** Unset means every interface, which is Node's own default. */
+  host?: string
   databaseUrl?: string
   vaultKey: Buffer
   publicUrl: string
@@ -32,6 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     port: parsed.PORT,
+    ...(parsed.HOST ? { host: parsed.HOST } : {}),
     ...(parsed.DATABASE_URL ? { databaseUrl: parsed.DATABASE_URL } : {}),
     vaultKey,
     publicUrl: parsed.PUBLIC_URL.replace(/\/$/, ''),
