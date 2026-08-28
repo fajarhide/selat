@@ -10,3 +10,6 @@ Screenshot*.png
 # are published. This repository has a public remote, so the whole directory is
 # ignored rather than named file by file.
 docs/
+
+# Working notes and local skills, not part of what this repo ships.
+.claude/

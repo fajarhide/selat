@@ -10,8 +10,7 @@ Notable changes, newest first. Dates are the day the work merged.
   four reads. The scope moves from `gmail.readonly` to `gmail.modify`, so every
   existing Google connection re-consents once (#86).
 - Google Calendar can write. `create_event`, `update_event` and `delete_event`,
-  which adds `calendar.events` beside `calendar.readonly`. `calendar.readonly`
-  stays because it is what lists the calendars (#86).
+  on `calendar.events` (#86).
 - GitHub can answer a review and close what it opened (#85).
 - An api key is called against the vendor before it is stored, so a typo fails
   at connect time rather than on the first tool call (#82, thanks
@@ -30,6 +29,11 @@ Notable changes, newest first. Dates are the day the work merged.
 
 ### Changed
 
+- Calendar asks for `calendar.calendarlist.readonly` where it used to ask for
+  `calendar.readonly`. `calendar.events` already covers every event tool,
+  reads included, and the only call outside it is `list_calendars` on
+  `/users/me/calendarList`. The old pair read every calendar wholesale to
+  satisfy one list call.
 - Hosted links point at `selat.dev`. The old host still answers (#93).
 
 ## 0.1.2 - 2026-08-23

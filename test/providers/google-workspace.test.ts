@@ -57,17 +57,20 @@ describe('one google application, three prefixes', () => {
     expect(new Set(scopes)).toEqual(
       new Set([
         'https://www.googleapis.com/auth/gmail.modify',
-        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/drive',
       ]),
     )
   })
 
-  it('keeps calendar.readonly beside calendar.events, because list_calendars needs it', () => {
-    // calendar.events does not grant calendarList.list, so dropping the
-    // readonly scope would break a tool that works today.
-    expect(gcal.scopes).toContain('https://www.googleapis.com/auth/calendar.readonly')
+  it('pairs calendar.events with the calendar list, and never asks for calendar.readonly', () => {
+    // calendar.events covers every event tool, reads included, but not
+    // calendarList.list. calendar.readonly would cover both and is what this
+    // used to ask for. It reads every calendar wholesale to satisfy one list
+    // call, which is the kind of ask a Google reviewer rejects.
+    expect(gcal.scopes).toContain('https://www.googleapis.com/auth/calendar.calendarlist.readonly')
+    expect(gcal.scopes).not.toContain('https://www.googleapis.com/auth/calendar.readonly')
   })
 })
 
