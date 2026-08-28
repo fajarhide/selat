@@ -7,11 +7,16 @@ import { bootRegistry } from './adapters/providers/boot.ts'
 const { pool, config, local } = await openDatabase()
 const token = local ? await provisionLocal(pool, local.root) : undefined
 
-const server = createServer({ pool, config, registry: bootRegistry() }).listen(config.port, () => {
+const app = createServer({ pool, config, registry: bootRegistry() })
+// Two call shapes rather than one with a default address: passing an explicit
+// '::' would lose Node's own fallback to IPv4 on a host where IPv6 is off.
+const server = config.host ? app.listen(config.port, config.host) : app.listen(config.port)
+server.on('listening', () => {
   console.log(
     JSON.stringify({
       msg: 'listening',
       port: config.port,
+      ...(config.host ? { host: config.host } : {}),
       ...(config.databaseUrl ? {} : { database: 'embedded', dataDir: local?.dataDir }),
     }),
   )
