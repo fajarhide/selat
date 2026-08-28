@@ -2,6 +2,16 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## 0.1.4 - 2026-08-29
+
+### Added
+
+- `HOST`, the address to listen on. Left unset it changes nothing, which is
+  what a container on a bridge network needs. A host-networked deployment
+  behind a reverse proxy sets `127.0.0.1`, so the proxy is the only thing that
+  can reach the port rather than the firewall being the only thing that stops
+  the internet reaching it (#96).
+
 ## 0.1.3 - 2026-08-28
 
 ### Added
