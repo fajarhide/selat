@@ -69,11 +69,17 @@ export const gmailManifest: ProviderManifest = {
       description: 'Fetch one message by id, with its headers and a snippet',
       write: false,
       request: 'GET /gmail/v1/users/me/messages/{id}',
+      // Sending `format` is choosing the response shape, so the projection below
+      // steps aside for it. Without this the default `fields` cut everything
+      // under `payload` except the headers, and `full` returned the same thing
+      // as `metadata` with no way to reach a body at all.
+      selector: 'format',
       args: {
         id: { type: 'string', required: true },
         format: {
           type: 'string',
-          description: 'metadata keeps headers only, full includes the body',
+          description:
+            'metadata keeps headers only, full returns the whole MIME tree with base64 part bodies',
           enum: ['metadata', 'full', 'minimal'],
           default: 'metadata',
         },

@@ -88,6 +88,29 @@ describe('gmail provider', () => {
     expect(upstream.calls[0]?.url).toContain('format=metadata')
   })
 
+  it('hands back the body when the caller asks for format=full', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /messages/,
+        body: {
+          id: 'm1',
+          threadId: 't1',
+          snippet: 'Your build finished',
+          payload: {
+            headers: [{ name: 'Subject', value: 'Build 41 passed' }],
+            mimeType: 'multipart/alternative',
+            parts: [{ mimeType: 'text/plain', body: { size: 42, data: 'SGkscmVhbCBib2R5' } }],
+          },
+        },
+      },
+    ])
+    const result = await gmail.callTool(ctx(upstream), 'get_message', { id: 'm1', format: 'full' })
+    expect(upstream.calls[0]?.url).toContain('format=full')
+    expect(result.content).toMatchObject({
+      payload: { parts: [{ mimeType: 'text/plain', body: { data: 'SGkscmVhbCBib2R5' } }] },
+    })
+  })
+
   it('converts a standard base64 raw message to the url-safe alphabet Gmail wants', async () => {
     // A model reaching for base64 produces + and /, which Gmail refuses in raw.
     // Converting here is the difference between a sent mail and an opaque 400.
