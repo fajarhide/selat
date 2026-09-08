@@ -547,9 +547,15 @@ function coerce(fail: Fail, name: string, def: ArgDef, value: unknown): unknown 
       const row = coerceAll(fail, shape, entry as Record<string, unknown>, `${name}[${index}]`)
       // buildRequest applies `param` to the outer arguments and never reaches
       // inside one, so the rename has to happen here or it is silently lost.
-      return Object.fromEntries(
-        Object.entries(row).map(([key, item]) => [shape[key]?.param ?? key, item]),
-      )
+      // setPath rather than a flat key, because `param` is a dotted path
+      // everywhere else in a JSON body, and an upstream that nests one level
+      // deeper than the list itself had no way to say so. Slides buries a
+      // replacement three deep. A single-segment param lands identically.
+      const renamed: Record<string, unknown> = {}
+      for (const [key, item] of Object.entries(row)) {
+        setPath(renamed, shape[key]?.param ?? key, item)
+      }
+      return renamed
     })
   }
 
