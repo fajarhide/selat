@@ -11,7 +11,7 @@ export const gslidesManifest: ProviderManifest = {
   id: 'gslides',
   prefix: 'gslides',
   grantId: 'google',
-  maturity: 'beta',
+  maturity: 'experimental',
   baseUrl: 'https://slides.googleapis.com',
   scopes: ['https://www.googleapis.com/auth/drive'],
   auth: { type: 'bearer' },
