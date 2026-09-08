@@ -2,6 +2,27 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## 0.1.5 - 2026-09-08
+
+### Added
+
+- Google Slides. `gslides__replace_all_text` swaps text across a deck, every
+  slide and speaker note at once, and sends them as one revision so a
+  half renamed deck is not a state anyone can see. It rides the Drive scope
+  `gdrive` already asks for, so no connected account consents a second time
+  (#101).
+
+### Fixed
+
+- A dotted `param` inside an `object[]` argument nests in the JSON body the way
+  it already did on an outer argument, rather than being sent as a literal
+  dotted key. Nothing shipped depended on the old behaviour: both `object[]`
+  users rename a single segment, where the two are the same (#101).
+- `gmail__get_message` reaches the message body. `format: full` said it included
+  one and returned exactly what `metadata` did, because the projection stopped at
+  `payload.headers`. A caller who names a format now gets the shape Gmail sends,
+  which also means `sizeEstimate` and `historyId` come with it (#103).
+
 ## 0.1.4 - 2026-08-29
 
 ### Added
