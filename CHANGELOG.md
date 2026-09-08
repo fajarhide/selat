@@ -2,6 +2,20 @@
 
 Notable changes, newest first. Dates are the day the work merged.
 
+## 0.1.6 - 2026-09-08
+
+### Added
+
+- `gslides` can build a deck rather than only rename one. `get_presentation`
+  reads the layouts, slides and shape object ids, `create_slide` adds slides
+  from a layout, and `insert_text` writes into one shape by its id. Building
+  from `layout_id` keeps a deck copied from a template looking like itself,
+  where a predefined layout would not. Still no new OAuth scope: Slides accepts
+  the Drive scope this prefix already rides (#105).
+- The Google scope check exercises `gslides`. It copies a deck, builds on the
+  copy and deletes it, and says so and skips when `SLIDES_DECK_ID` is unset
+  rather than reporting a pass it did not earn (#105).
+
 ## 0.1.5 - 2026-09-08
 
 ### Added
