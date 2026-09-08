@@ -103,6 +103,60 @@ if (folder) {
   await step('gdrive__delete_file', { file_id: folder.id }, () => `deleted ${folder.id}`)
 }
 
+// Slides rides the drive scope, so this section proves the API is enabled on
+// the project rather than proving a scope. It works on a copy and deletes it,
+// because there is no tool that removes a slide once one is added.
+console.log(`\nslides (on the drive scope)`)
+const deck = process.env.SLIDES_DECK_ID ?? ''
+if (!deck) {
+  console.log(`  skip  gslides                  set SLIDES_DECK_ID to a deck to copy and build on`)
+} else {
+  const copy = await step(
+    'gdrive__copy_file',
+    { file_id: deck, name: `${MARK}-deck` },
+    (c) => `copied to ${c.id}`,
+  )
+  if (copy) {
+    const before = await step(
+      'gslides__get_presentation',
+      { presentation_id: copy.id },
+      (c) => `${c.slides?.length ?? 0} slides, ${c.layouts?.length ?? 0} layouts`,
+    )
+    const layout = before?.layouts?.[0]
+    if (layout) {
+      await step(
+        'gslides__create_slide',
+        {
+          presentation_id: copy.id,
+          slides: [{ layout_id: layout.objectId, object_id: `${MARK}-slide` }],
+        },
+        (c) => `added ${c.replies?.length ?? 0} slide`,
+      )
+      // Read back rather than guess: a slide built from a layout gets its
+      // placeholder ids from Google, and insert_text has nothing to aim at
+      // without them.
+      const after = await call('gslides__get_presentation', { presentation_id: copy.id }).catch(
+        () => null,
+      )
+      const made = (after?.slides ?? []).find((s: any) => s.objectId === `${MARK}-slide`)
+      const shape = made?.pageElements?.[0]
+      if (shape) {
+        await step(
+          'gslides__insert_text',
+          { presentation_id: copy.id, insertions: [{ object_id: shape.objectId, text: MARK }] },
+          () => `wrote into ${shape.objectId}`,
+        )
+      }
+      await step(
+        'gslides__replace_all_text',
+        { presentation_id: copy.id, replacements: [{ find: MARK, replace: `${MARK}-done` }] },
+        (c) => `${c.replies?.length ?? 0} replies`,
+      )
+    }
+    await step('gdrive__delete_file', { file_id: copy.id }, () => `deleted ${copy.id}`)
+  }
+}
+
 console.log(`\ngmail.modify`)
 const profile = await step('gmail__get_profile', {}, (c) => c.emailAddress)
 await step('gmail__list_messages', { query: 'in:inbox' }, count)

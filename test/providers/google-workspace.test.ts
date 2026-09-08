@@ -388,6 +388,88 @@ describe('google slides', () => {
     expect(result.content).toMatchObject({ presentationId: 'p1' })
   })
 
+  it('asks Google to narrow the deck, rather than carrying it all back and cutting it here', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /presentations/,
+        body: {
+          presentationId: 'p1',
+          title: 'Template',
+          layouts: [{ objectId: 'layout-a', layoutProperties: { displayName: 'TITLE_AND_BODY' } }],
+          slides: [{ objectId: 'slide-1', pageElements: [{ objectId: 'shape-9' }] }],
+        },
+      },
+    ])
+    const result = await gslides.callTool(ctx(upstream), 'get_presentation', {
+      presentation_id: 'p1',
+    })
+    const url = new URL(upstream.calls[0]?.url ?? '')
+    expect(url.pathname).toBe('/v1/presentations/p1')
+    expect(url.searchParams.get('fields')).toContain('layouts(objectId')
+    // The layout ids and the shape ids are the whole reason to call this.
+    expect(result.content).toMatchObject({
+      layouts: [{ objectId: 'layout-a' }],
+      slides: [{ objectId: 'slide-1', pageElements: [{ objectId: 'shape-9' }] }],
+    })
+  })
+
+  it('leaves the response alone when the caller names the fields itself', async () => {
+    const upstream = fakeUpstream([
+      { match: /presentations/, body: { presentationId: 'p1', revisionId: 'rev-7' } },
+    ])
+    const result = await gslides.callTool(ctx(upstream), 'get_presentation', {
+      presentation_id: 'p1',
+      response_fields: 'presentationId,revisionId',
+    })
+    expect(new URL(upstream.calls[0]?.url ?? '').searchParams.get('fields')).toBe(
+      'presentationId,revisionId',
+    )
+    expect(result.content).toEqual({ presentationId: 'p1', revisionId: 'rev-7' })
+  })
+
+  it('builds slides from a layout the deck already has, in one revision', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /batchUpdate/,
+        body: { presentationId: 'p1', replies: [{ createSlide: { objectId: 'slide-new' } }] },
+      },
+    ])
+    const result = await gslides.callTool(ctx(upstream), 'create_slide', {
+      presentation_id: 'p1',
+      slides: [
+        { layout_id: 'layout-a', index: 1, object_id: 'slide-new' },
+        { layout: 'TITLE_AND_BODY' },
+      ],
+    })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      requests: [
+        {
+          createSlide: {
+            slideLayoutReference: { layoutId: 'layout-a' },
+            insertionIndex: 1,
+            objectId: 'slide-new',
+          },
+        },
+        { createSlide: { slideLayoutReference: { predefinedLayout: 'TITLE_AND_BODY' } } },
+      ],
+    })
+    // Without replies the caller never learns the id of a slide it did not name.
+    expect(result.content).toMatchObject({ replies: [{ createSlide: { objectId: 'slide-new' } }] })
+  })
+
+  it('aims insert_text at an object id', async () => {
+    const upstream = fakeUpstream([
+      { match: /batchUpdate/, body: { presentationId: 'p1', replies: [{}] } },
+    ])
+    await gslides.callTool(ctx(upstream), 'insert_text', {
+      presentation_id: 'p1',
+      insertions: [{ object_id: 'shape-9', text: 'Hello' }],
+    })
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      requests: [{ insertText: { objectId: 'shape-9', text: 'Hello' } }],
+    })
+  })
+
   it('rides the drive scope, so no connected account re-consents for it', () => {
     expect(gslides.grantId).toBe('google')
     expect(gslides.scopes).toEqual(['https://www.googleapis.com/auth/drive'])
