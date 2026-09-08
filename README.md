@@ -251,7 +251,7 @@ agent that silently reasons over half a page is worse than one that errors.
 | `gmail` | beta | Profile, message list and get, label |
 | `gcal` | beta | Calendars, event list and get |
 | `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete. A download past 256 KB comes back as a file id rather than base64 |
-| `gslides` | experimental | Replace text across a presentation, every slide and speaker note at once. Rides the Drive scope, so a Google connection that already works needs no second consent |
+| `gslides` | experimental | Read a deck's layouts, slides and shape ids, add slides from a layout, write text into one shape, and replace text across every slide and speaker note at once. Rides the Drive scope, so a Google connection that already works needs no second consent |
 | `discord` | beta | Bot user, guilds, channels, message list and post |
 | `stripe` | experimental | Customers and charges, read only. Generated from the docs and never run against the vendor |
 | `facebook` | beta | Authenticated user |
