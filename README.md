@@ -251,6 +251,7 @@ agent that silently reasons over half a page is worse than one that errors.
 | `gmail` | beta | Profile, message list and get, label |
 | `gcal` | beta | Calendars, event list and get |
 | `gdrive` | beta | About, file list, get, download and export, plus upload, replace contents, create, rename, move, copy, share, trash and delete. A download past 256 KB comes back as a file id rather than base64 |
+| `gslides` | beta | Replace text across a presentation, every slide and speaker note at once. Rides the Drive scope, so a Google connection that already works needs no second consent |
 | `discord` | beta | Bot user, guilds, channels, message list and post |
 | `stripe` | experimental | Customers and charges, read only. Generated from the docs and never run against the vendor |
 | `facebook` | beta | Authenticated user |
@@ -265,10 +266,11 @@ anything below `ga` if you want it to. Nothing is `ga` yet, and saying so is
 cheaper than finding out later.
 
 A provider whose client id is blank is left out of the registry entirely, so a
-deployment serves what it has credentials for and nothing else. `gmail`, `gcal`
-and `gdrive` share one Google grant, so one consent screen covers all three.
-`gdrive` asks for full Drive access, so an existing Google connection made
-before that has to reconnect once before its write tools work.
+deployment serves what it has credentials for and nothing else. `gmail`, `gcal`,
+`gdrive` and `gslides` share one Google grant, so one consent screen covers all
+four. `gdrive` asks for full Drive access, so an existing Google connection made
+before that has to reconnect once before its write tools work. `gslides` asks
+for nothing further: the Slides API accepts that same Drive scope.
 
 If you want a provider that is not here, the adapter contract is small and the
 conformance suite tells you when you are done. See

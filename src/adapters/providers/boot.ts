@@ -5,6 +5,7 @@ import { facebookProvider } from './facebook.ts'
 import { githubProvider } from './github.ts'
 import { gcalendarProvider } from './gcalendar.ts'
 import { gdriveProvider } from './gdrive.ts'
+import { gslidesProvider } from './gslides.ts'
 import { gmailProvider } from './gmail.ts'
 import { notionProvider } from './notion.ts'
 import { slackProvider } from './slack.ts'
@@ -34,6 +35,7 @@ export function bootRegistry(env: NodeJS.ProcessEnv = process.env): Registry {
     ['GOOGLE_CLIENT_ID', gmailProvider],
     ['GOOGLE_CLIENT_ID', gcalendarProvider],
     ['GOOGLE_CLIENT_ID', gdriveProvider],
+    ['GOOGLE_CLIENT_ID', gslidesProvider],
     ['NOTION_CLIENT_ID', notionProvider],
     ['SLACK_CLIENT_ID', slackProvider],
     ['FACEBOOK_CLIENT_ID', facebookProvider],

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { gcalendarProvider } from '../../src/adapters/providers/gcalendar.ts'
 import { gdriveProvider } from '../../src/adapters/providers/gdrive.ts'
+import { gslidesProvider } from '../../src/adapters/providers/gslides.ts'
 import { gmailProvider } from '../../src/adapters/providers/gmail.ts'
 import { fakeUpstream, itemsPage, type FakeUpstream } from '../helpers/fake-upstream.ts'
 import { runAdapterConformance } from '../conformance/adapter.ts'
 
 const gcal = gcalendarProvider()
 const gdrive = gdriveProvider()
+const gslides = gslidesProvider()
 
 function ctx(upstream: FakeUpstream) {
   return { workspaceId: 'ws-1', requestId: 'req-1', accessToken: 'ya29.token', fetch: upstream.fetch }
@@ -348,5 +350,47 @@ describe('google drive', () => {
     const writes = gdrive.listTools().filter((tool) => tool.write)
     expect(writes.map((tool) => tool.name)).toContain('delete_file')
     expect(writes.map((tool) => tool.name)).not.toContain('download_file')
+  })
+})
+
+describe('google slides', () => {
+  it('nests a replacement the way batchUpdate wants it', async () => {
+    const upstream = fakeUpstream([
+      {
+        match: /batchUpdate/,
+        body: { presentationId: 'p1', replies: [{ replaceAllText: { occurrencesChanged: 2 } }] },
+      },
+    ])
+    const result = await gslides.callTool(ctx(upstream), 'replace_all_text', {
+      presentation_id: 'p1',
+      replacements: [
+        { find: 'NAMA PEMBICARA / AUTHOR', replace: 'Someone' },
+        { find: 'OLD TITLE', replace: 'New title', match_case: false },
+      ],
+    })
+    expect(new URL(upstream.calls[0]?.url ?? '').pathname).toBe('/v1/presentations/p1:batchUpdate')
+    expect(JSON.parse(String(upstream.calls[0]?.init?.body))).toEqual({
+      requests: [
+        {
+          replaceAllText: {
+            containsText: { text: 'NAMA PEMBICARA / AUTHOR', matchCase: true },
+            replaceText: 'Someone',
+          },
+        },
+        {
+          replaceAllText: {
+            containsText: { text: 'OLD TITLE', matchCase: false },
+            replaceText: 'New title',
+          },
+        },
+      ],
+    })
+    expect(result.content).toMatchObject({ presentationId: 'p1' })
+  })
+
+  it('rides the drive scope, so no connected account re-consents for it', () => {
+    expect(gslides.grantId).toBe('google')
+    expect(gslides.scopes).toEqual(['https://www.googleapis.com/auth/drive'])
+    expect(new Set(gdrive.scopes)).toEqual(new Set(gslides.scopes))
   })
 })
